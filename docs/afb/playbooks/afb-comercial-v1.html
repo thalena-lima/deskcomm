@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>AFB Engenharia — Playbook Comercial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff; --bg-soft:#f4f6f8; --panel:#ffffff;
+    --ink:#13171c; --ink-2:#3c4650; --ink-3:#6c7681;
+    --line:#dee3e8; --line-2:#ebeef1;
+    --accent:#0f4c81; --accent-soft:#e8f0f7; --accent-ink:#0f4c81;
+    --warn:#8a5a00; --warn-soft:#fdf4e3;
+    --stop:#8c2f2f; --stop-soft:#fbedec;
+    --ok:#1f6b4a; --ok-soft:#e9f4ef;
+    --script:#f7f9fb;
+    --shadow:0 1px 2px rgba(16,24,32,.06),0 4px 14px rgba(16,24,32,.05);
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --bg:#131619; --bg-soft:#181c20; --panel:#1a1e23;
+      --ink:#e9edf1; --ink-2:#bcc5ce; --ink-3:#889299;
+      --line:#2b3138; --line-2:#22272d;
+      --accent:#7fb2dd; --accent-soft:#1b2833; --accent-ink:#9cc6ea;
+      --warn:#dfb069; --warn-soft:#2a2317;
+      --stop:#e39c97; --stop-soft:#2c1e1d;
+      --ok:#7fc8a3; --ok-soft:#17261e;
+      --script:#1d2227;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#131619; --bg-soft:#181c20; --panel:#1a1e23;
+    --ink:#e9edf1; --ink-2:#bcc5ce; --ink-3:#889299;
+    --line:#2b3138; --line-2:#22272d;
+    --accent:#7fb2dd; --accent-soft:#1b2833; --accent-ink:#9cc6ea;
+    --warn:#dfb069; --warn-soft:#2a2317;
+    --stop:#e39c97; --stop-soft:#2c1e1d;
+    --ok:#7fc8a3; --ok-soft:#17261e;
+    --script:#1d2227;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;
+  }
+  .layout{display:flex;max-width:1220px;margin:0 auto;gap:44px;padding:0 22px}
+
+  aside{
+    width:232px;flex:0 0 232px;position:sticky;top:0;align-self:flex-start;
+    height:100vh;overflow-y:auto;padding:30px 0 40px;
+  }
+  .brand{font-weight:700;font-size:15px;letter-spacing:-.01em;margin-bottom:2px}
+  .brandsub{font-size:11.5px;color:var(--ink-3);letter-spacing:.09em;text-transform:uppercase;font-weight:600;margin-bottom:22px}
+  aside nav a{
+    display:block;padding:6px 10px;margin:0 0 1px -10px;border-radius:6px;
+    color:var(--ink-2);text-decoration:none;font-size:14px;line-height:1.35;
+  }
+  aside nav a:hover{background:var(--bg-soft);color:var(--ink)}
+  aside nav a.on{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+  aside nav .grp{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:20px 0 7px}
+  .themebtn{
+    margin-top:26px;background:none;border:1px solid var(--line);color:var(--ink-3);
+    font:inherit;font-size:12.5px;padding:6px 12px;border-radius:20px;cursor:pointer;
+  }
+  .themebtn:hover{color:var(--ink);border-color:var(--ink-3)}
+
+  main{flex:1;min-width:0;padding-bottom:140px}
+
+  header.top{padding:46px 0 26px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:0 0 13px}
+  h1{font-size:33px;line-height:1.18;margin:0 0 12px;letter-spacing:-.022em;font-weight:700}
+  .sub{color:var(--ink-2);margin:0;max-width:60ch}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:20px;font-size:13px;color:var(--ink-3)}
+  .meta b{color:var(--ink);font-weight:600}
+
+  section{padding-top:52px;scroll-margin-top:20px}
+  .sn{font-size:12px;letter-spacing:.11em;text-transform:uppercase;color:var(--accent-ink);font-weight:700;margin:0 0 5px}
+  h2{font-size:25px;line-height:1.25;margin:0 0 8px;font-weight:700;letter-spacing:-.018em}
+  .lede{color:var(--ink-3);font-size:15px;margin:0 0 22px;max-width:62ch}
+  h3{font-size:17.5px;margin:32px 0 9px;font-weight:650;letter-spacing:-.01em}
+  h4{font-size:14.5px;margin:22px 0 7px;font-weight:650}
+  p{margin:0 0 13px;color:var(--ink-2)}
+  ul,ol{margin:0 0 14px;padding-left:21px;color:var(--ink-2)}
+  li{margin-bottom:7px}
+  strong{color:var(--ink);font-weight:600}
+
+  .msg{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:20px 0 30px;overflow:hidden;box-shadow:var(--shadow)}
+  .tabs{display:flex;gap:5px;padding:0 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tabs button{
+    background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+    padding:9px 12px;font:inherit;font-size:13.5px;font-weight:550;color:var(--ink-3);cursor:pointer;
+  }
+  .tabs button:hover{color:var(--ink)}
+  .tabs button.on{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:650}
+  .pane{display:none;padding:18px 20px 20px}
+  .pane.on{display:block}
+  .msg.single{padding:18px 20px 20px}
+
+  .script{
+    position:relative;background:var(--script);border:1px solid var(--line);border-radius:9px;
+    padding:17px 19px 17px;font-size:15.3px;line-height:1.66;color:var(--ink);
+    white-space:pre-wrap;word-wrap:break-word;
+  }
+  .script.hascopy{padding-top:44px}
+  .copy{
+    position:absolute;top:10px;right:10px;background:var(--bg);border:1px solid var(--line);
+    color:var(--ink-3);font:inherit;font-size:11.5px;font-weight:600;padding:4px 10px;
+    border-radius:6px;cursor:pointer;letter-spacing:.02em;z-index:2;
+  }
+  .copy:hover{color:var(--ink);border-color:var(--ink-3)}
+  .copy.done{color:var(--ok);border-color:var(--ok)}
+  .why{margin:13px 0 0;font-size:13.8px;color:var(--ink-3);border-left:2px solid var(--line);padding-left:13px}
+  .why b{color:var(--ink-2)}
+
+  .note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:13px 17px;border-radius:0 7px 7px 0;margin:18px 0}
+  .note p:last-child{margin-bottom:0}
+  .note.stop{border-left-color:var(--stop);background:var(--stop-soft)}
+  .note.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+  .note.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+  .note .nt{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--accent-ink);margin:0 0 5px}
+  .note.stop .nt{color:var(--stop)} .note.warn .nt{color:var(--warn)} .note.ok .nt{color:var(--ok)}
+
+  .tablewrap{overflow-x:auto;margin:18px 0 22px;border:1px solid var(--line);border-radius:9px}
+  table{border-collapse:collapse;width:100%;min-width:520px;font-size:14.3px}
+  th{text-align:left;padding:10px 14px;background:var(--bg-soft);font-size:11px;letter-spacing:.09em;
+     text-transform:uppercase;color:var(--ink-3);font-weight:700;border-bottom:1px solid var(--line)}
+  td{padding:11px 14px;border-bottom:1px solid var(--line-2);color:var(--ink-2);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td strong{color:var(--ink)}
+
+  details.obj{border:1px solid var(--line);border-radius:9px;margin:9px 0;background:var(--panel);overflow:hidden}
+  details.obj summary{
+    padding:13px 18px;cursor:pointer;font-weight:600;color:var(--ink);font-size:15.5px;
+    list-style:none;display:flex;align-items:flex-start;gap:10px;
+  }
+  details.obj summary::-webkit-details-marker{display:none}
+  details.obj summary::before{content:"+";color:var(--ink-3);font-weight:600;flex:0 0 auto;line-height:1.5}
+  details.obj[open] summary::before{content:"–"}
+  details.obj summary:hover{background:var(--bg-soft)}
+  details.obj .body{padding:0 18px 18px 40px}
+  .behind{font-size:13.3px;color:var(--ink-3);margin:0 0 11px}
+
+  .pill{display:inline-block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;
+        padding:3px 9px;border-radius:4px;background:var(--accent-soft);color:var(--accent-ink);margin-bottom:9px}
+  .pill.stop{background:var(--stop-soft);color:var(--stop)}
+  .pill.ok{background:var(--ok-soft);color:var(--ok)}
+  .pill.warn{background:var(--warn-soft);color:var(--warn)}
+
+  hr.rule{height:1px;background:var(--line);border:0;margin:56px 0 0}
+  footer{border-top:1px solid var(--line);margin-top:60px;padding-top:22px;font-size:13px;color:var(--ink-3)}
+
+  @media (max-width:900px){
+    .layout{flex-direction:column;gap:0;padding:0 18px}
+    aside{position:static;width:auto;flex:none;height:auto;padding:24px 0 6px;border-bottom:1px solid var(--line)}
+    aside nav{display:flex;flex-wrap:wrap;gap:4px}
+    aside nav a{margin:0;padding:5px 11px;border:1px solid var(--line);border-radius:20px;font-size:13px}
+    aside nav .grp{display:none}
+    header.top{padding-top:30px}
+    h1{font-size:27px}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside>
+  <div class="brand">AFB Engenharia</div>
+  <div class="brandsub">Playbook Comercial</div>
+  <nav id="nav">
+    <div class="grp">Base</div>
+    <a href="#como-usar">Como usar</a>
+    <a href="#principios">Princípios</a>
+    <div class="grp">Sequência</div>
+    <a href="#m1">1 · Abertura</a>
+    <a href="#m2">2 · Qualificação</a>
+    <a href="#m3">3 · Gancho de valor</a>
+    <a href="#m4">4 · Desarme de risco</a>
+    <a href="#m5">5 · Micro-SPIN</a>
+    <a href="#m6">6 · Convite</a>
+    <a href="#pos-sim">7 · Pós-sim e fatura</a>
+    <a href="#followup">8 · Follow-up</a>
+    <div class="grp">Outros canais</div>
+    <a href="#email">E-mail</a>
+    <a href="#ligacao">Ligação</a>
+    <div class="grp">Apoio</div>
+    <a href="#objecoes">Objeções</a>
+    <a href="#nunca">O que nunca dizer</a>
+    <a href="#metricas">Métricas</a>
+    <a href="#pendente">Em desenvolvimento</a>
+  </nav>
+  <button class="themebtn" id="themebtn">Alternar tema</button>
+</aside>
+
+<main>
+
+<header class="top">
+  <p class="eyebrow">AFB Engenharia &amp; Consultoria Elétrica</p>
+  <h1>Playbook Comercial — Consultoria em Energia</h1>
+  <p class="sub">Documento operacional da equipe comercial. Sequência de WhatsApp, e-mail, roteiro de ligação, cadência de follow-up e tratamento de objeções para a campanha de consultoria em eficiência energética.</p>
+  <div class="meta">
+    <span><b>Objetivo único:</b> agendar reunião de 30 minutos</span>
+    <span><b>Faixa oficial:</b> 10% a 35%</span>
+    <span><b>Ciclo:</b> 15 dias</span>
+    <span><b>Versão 6</b></span>
+  </div>
+</header>
+
+<section id="como-usar">
+  <p class="sn">Base</p>
+  <h2>Como usar este playbook</h2>
+  <p class="lede">Leia esta página inteira antes do primeiro contato. As regras abaixo valem mais que qualquer texto pronto.</p>
+
+  <div class="note stop">
+    <p class="nt">Regra que não se quebra</p>
+    <p><strong>A sequência de seis mensagens é uma conversa, não um disparo.</strong> Cada mensagem só é enviada depois que o cliente respondeu à anterior. Mandar duas ou três seguidas sem resposta queima o contato e queima a lista.</p>
+  </div>
+
+  <p>Cada etapa tem uma copy única. Copie, substitua os campos entre colchetes e revise antes de enviar — mensagem com <em>[Nome]</em> não preenchido encerra a conversa antes de ela começar. Todo bloco de texto tem botão de cópia no canto.</p>
+
+  <p>Quem não responde entra na <a href="#followup">cadência de follow-up</a>, de 15 dias. Quem responde segue a conversa das Etapas 2 a 6.</p>
+
+  <div class="note warn">
+    <p class="nt">Área de concessão</p>
+    <p>As copies deste playbook citam a <strong>CEMIG</strong> como distribuidora. Esta é a versão para Minas Gerais. Para prospect atendido por outra distribuidora, troque o nome antes de enviar.</p>
+  </div>
+
+  <h4>Campos a preencher</h4>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Campo</th><th>O que entra</th></tr></thead>
+    <tbody>
+      <tr><td><strong>[Nome]</strong></td><td>Primeiro nome do interlocutor</td></tr>
+      <tr><td><strong>[Vendedor]</strong></td><td>Seu primeiro nome</td></tr>
+      <tr><td><strong>[Empresa]</strong></td><td>Nome da empresa do cliente</td></tr>
+      <tr><td><strong>[dia] / [hora]</strong></td><td>Sempre duas opções concretas. Nunca "quando você puder"</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="principios">
+  <p class="sn">Base</p>
+  <h2>Princípios inegociáveis</h2>
+  <p class="lede">Valem para todos os canais. Quebrar uma delas custa mais caro do que perder o lead.</p>
+
+  <ol>
+    <li><strong>Uma única chamada para ação: a reunião de 30 minutos.</strong> Nunca oferecer duas coisas na mesma mensagem.</li>
+    <li><strong>A faixa de 10% a 35% é histórico, não promessa.</strong> A formulação correta é "temos encontrado economias típicas entre 10% e 35%". Nunca "você vai reduzir 30%".</li>
+    <li><strong>Não somos vendedores de energia. Somos engenharia.</strong> Analisamos a instalação e o contrato — não apenas cotamos preço de kWh.</li>
+    <li><strong>A palavra "solar" nunca é puxada por nós.</strong> Se o cliente perguntar, respondemos com clareza (ver objeções).</li>
+    <li><strong>Nada de credenciamento com a distribuidora.</strong> Trabalhamos com as principais comercializadoras do país: CEMIG, Shell Energy, Enel, Comerc Energia, Prime Energy, Origo e Energisa. Dizer que somos credenciados pela CEMIG como distribuidora é incorreto e cria problema.</li>
+    <li><strong>A fatura é pedida na Etapa 7</strong>, depois do sim à reunião. Nunca no primeiro contato.</li>
+    <li><strong>Manutenção e subestação não entram na abordagem.</strong> Se o cliente puxar, confirmamos que fazemos e voltamos ao tema da fatura.</li>
+    <li><strong>Falamos em nome da AFB.</strong> O vendedor usa o diretor técnico como credencial em terceira pessoa.</li>
+    <li><strong>Cada follow-up traz informação nova.</strong> "Passando para saber se viu", "conseguiu analisar?" e "alguma novidade?" estão proibidos.</li>
+  </ol>
+
+  <div class="note">
+    <p class="nt">Postura</p>
+    <p>Não estamos pedindo um favor nem oferecendo promoção. Estamos oferecendo uma análise técnica que a empresa dele não tem, e que custa 30 minutos para ele entender. Quem fala de igual para igual com diretor é quem marca reunião com diretor.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="m1">
+  <p class="sn">WhatsApp · Etapa 1</p>
+  <h2>Abertura / Atenção</h2>
+  <p class="lede">Objetivo: comprar o direito de continuar falando. Esta mensagem <strong>não pede reunião</strong>. Se o convite de 30 minutos vier aqui, o cliente recusa antes de saber do que se trata.</p>
+
+  <div class="msg single">
+    <div class="script">Olá bom dia! Aqui é [Vendedor], da AFB Engenharia &amp; Consultoria.
+
+Atuamos com consultoria de eficiência energética.
+
+Estamos realizando estudo técnico para identificar custos desnecessários na conta de energia e oportunidades de redução mensal.
+
+Essas correções podem gerar economia relevantes, sem necessidade de obras ou investimento em equipamentos. Nos nossos estudos, temos encontrado economias típicas entre 10% a 35%, a depender do perfil de consumo da empresa.
+
+Posso te explicar rapidamente como funciona?</div>
+    <p class="why"><b>Atenção.</b> "Sem necessidade de obras ou investimento" vem antes do percentual de propósito: é o que separa a AFB do vendedor de usina logo na leitura inicial. E "a depender do perfil de consumo" é o que mantém a faixa como histórico e não como promessa — não corte.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="m2">
+  <p class="sn">WhatsApp · Etapa 2</p>
+  <h2>Qualificação / Situação</h2>
+  <p class="lede">Só é enviada depois da resposta à Etapa 1. A permissão já foi dada, então vá direto à pergunta. <strong>Uma pergunta só.</strong></p>
+
+  <div class="msg single">
+    <div class="script">Ótimo. Antes de entrar nos detalhes, gostaria de entender um pouco melhor o cenário de vocês:
+
+Hoje você tem clareza de como os custos com energia são formados e quais dessas componentes podem ser ajustadas para reduzir o valor final da conta?</div>
+  </div>
+
+  <h3>Como usar a resposta</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Resposta do cliente</th><th>Leitura</th><th>Para onde ir</th></tr></thead>
+    <tbody>
+      <tr><td><strong>"Não" · "não sei" · "quem vê é o financeiro"</strong></td><td>Ninguém revisa. Melhor cenário, e o mais comum.</td><td>Etapa 3, direto</td></tr>
+      <tr><td><strong>"Tenho clareza" · "a gente acompanha"</strong></td><td>Pode ser verdade ou defesa. Não confrontar.</td><td>Ponte abaixo, depois Etapa 3</td></tr>
+      <tr><td><strong>"Já temos consultoria" · "já migramos"</strong></td><td>Não é objeção, é informação.</td><td>Ver <a href="#objecoes">objeções</a></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Ponte para quem diz que já acompanha</h4>
+  <div class="script">Que bom, é raro. Então você provavelmente já olhou demanda contratada e modalidade tarifária. A parte que quase ninguém revisa é o preço da energia em si, que hoje dá para negociar fora da distribuidora. É por aí que costumamos reduzir custos.</div>
+
+  <div class="note warn">
+    <p class="nt">Por que uma pergunta só</p>
+    <p>Pergunta múltipla no WhatsApp é respondida pela metade ou não é respondida. E pergunta que expõe ignorância faz o gestor sumir em vez de admitir que não sabe. Quem decide não gosta de ser exposto no próprio terreno.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="m3">
+  <p class="sn">WhatsApp · Etapa 3</p>
+  <h2>Gancho de valor</h2>
+  <p class="lede">Não é para explicar a consultoria inteira. É para o cliente perceber que existe algo na conta dele que nunca foi olhado.</p>
+
+  <div class="msg single">
+    <div class="script">Nossa consultoria atua em duas frentes.
+
+A primeira é a análise da fatura e instalação. Verificamos o seu perfil de consumo e comparamos com o melhor modelo de contratação. Nessa analise normalmente identificamos custos que podem ser reduzidos por meio de ajustes técnicos.
+
+A segunda frente é o preço da energia. Cotamos com as principais comercializadoras do mercado e comparamos com o que a empresa paga hoje. Conseguimos ofertar um custo por kw/h muito menor do que o praticado.
+
+É justamente analisando essas duas frentes que encontramos as oportunidades de economia que comentei, que variam de 10 a 35% do custo por mes.</div>
+    <p class="why"><b>Cuidado no fechamento.</b> "Conseguimos ofertar um custo por kW/h muito menor do que o praticado" é a única afirmação categórica do funil, e é feita antes da cotação. Se em algum caso a comercializadora não bater o preço da distribuidora, é a frase que o cliente vai lembrar na reunião de fechamento. Use com consciência disso.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="m4">
+  <p class="sn">WhatsApp · Etapa 4</p>
+  <h2>Desarme de risco</h2>
+  <p class="lede">O que impede o sim agora não é falta de interesse: é medo de obra, de custo e de mexer na operação. Esta mensagem responde tudo antes de ele perguntar.</p>
+
+  <div class="msg single">
+    <div class="script">Só para adiantar as dúvidas mais comuns:
+
+Não é energia solar, não tem obra e não exige investimento em equipamentos.
+
+A distribuidora (CEMIG) continua a mesma, cuidando da rede, manutenção e emergências. Sua operação não muda.
+
+O que fazemos é um estudo técnico para identificar uma forma mais eficiente de contratar e gerir sua energia.</div>
+    <p class="why"><b>Troque a distribuidora quando necessário.</b> CEMIG está escrita para Minas. Prospect de outra área de concessão exige o nome correto, senão a frase erra na cara do cliente.</p>
+  </div>
+
+  <div class="note warn">
+    <p class="nt">O motivo da gratuidade ficou de fora de propósito</p>
+    <p>Explicar aqui que a remuneração vem da comercializadora abre discussão sobre modelo de negócio no meio de uma mensagem que serve para tirar objeções. Isso entra na reunião, na hora do preço. Se o cliente perguntar antes, use a resposta completa em <a href="#objecoes">objeções</a>.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="m5">
+  <p class="sn">WhatsApp · Etapa 5</p>
+  <h2>Micro-SPIN</h2>
+  <p class="lede">Fazer o cliente concluir sozinho que vale investigar. A conclusão precisa ser dele — por isso termina em pergunta e não antecipa a resposta.</p>
+
+  <div class="msg single">
+    <div class="script">Se aumenta o custo com matéria-prima, frete ou folha, a empresa normalmente para, analisa e busca alternativas.
+
+Com energia, muitas vezes a conta simplesmente chega e é paga.
+
+Mas energia também é um custo operacional importante. Não faz sentido revisar esse custo com a mesma atenção dos demais?</div>
+  </div>
+
+  <div class="note stop">
+    <p class="nt">Enviar e esperar</p>
+    <p>Esta é a única mensagem da sequência que exige silêncio depois. Se o vendedor emendar o convite no mesmo envio, ele responde a pergunta pelo cliente e perde o efeito inteiro — o sim mental precisa acontecer antes do convite chegar.</p>
+    <p>Se a resposta for evasiva ou não vier em 24h, <strong>não repita a pergunta</strong>. Vá direto para a Etapa 6: o convite é, ele próprio, uma forma de o cliente responder.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="m6">
+  <p class="sn">WhatsApp · Etapa 6</p>
+  <h2>Convite para a reunião</h2>
+  <p class="lede">Tudo já foi explicado. Esta mensagem faz uma coisa só: transformar interesse em horário marcado. Sempre com duas opções concretas.</p>
+
+  <div class="msg single">
+    <div class="script">O próximo passo é uma reunião de 30 minutos.
+
+Nessa conversa, eu te apresento nosso método, entendo o cenário da sua empresa e avaliamos o potencial de economia.
+
+Com base na fatura, disponibilizaremos o relatório técnico com o diagnostico energético da sua empresa, de forma gratuita, com dados e números, onde estão as oportunidades de economia e quanto pode ser reduzido por mês.
+
+Tenho disponibilidade [dia] às [hora] ou [dia] às [hora]. Qual funciona melhor para você?</div>
+    <p class="why"><b>O relatório é o que compra os 30 minutos.</b> Sem ele, o cliente avalia se vale ouvir uma apresentação. Com ele, avalia se vale receber um diagnóstico da própria empresa. A fatura que torna isso possível é pedida na Etapa 7, logo após o sim.</p>
+  </div>
+
+  <div class="note stop">
+    <p class="nt">Duas regras sobre a promessa do relatório</p>
+    <p><strong>Apresentamos, não enviamos.</strong> Se o vendedor prometer mandar por e-mail, o cliente recebe, agradece e some — e a reunião de fechamento se perde. O relatório é apresentado na segunda reunião e entregue ali.</p>
+    <p><strong>A regra do achado único continua valendo.</strong> Um ponto da fatura na primeira reunião. O relatório completo e o consolidado de economia ficam para a segunda.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="pos-sim">
+  <p class="sn">Etapa 7 · Depois do sim</p>
+  <h2>Confirmação e captação da fatura</h2>
+  <p class="lede">Etapa que mais muda a conversão da reunião. Com a fatura em mãos, a reunião deixa de ser explicação de método e passa a ser sobre a empresa dele.</p>
+
+  <h4>Imediatamente após o sim</h4>
+  <div class="script">Fechado.. Agendado para [dia], às [hora]. Reservei 30 minutos. [Link ou endereço].
+
+Para eu preparar o relatório que combinamos, preciso de uma fatura de energia recente, em foto ou PDF. A conta já traz o histórico de doze meses, então uma fatura basta.
+
+Com ela em mãos eu chego na reunião com os números da sua empresa.
+
+Se não der para enviar, tudo bem — a gente conversa do mesmo jeito.</div>
+
+  <h4>Lembrete, 24 horas antes</h4>
+  <div class="script">Olá, [Nome]! Só confirmando nosso horário de amanhã, às [hora].
+
+Esse horário ficou reservado para nossa análise da [Empresa]. Se estiver tudo certo, me confirma por aqui para eu manter na agenda.</div>
+  <p class="why"><b>Se a fatura ainda não chegou</b>, acrescente uma linha: "Se conseguir me mandar a fatura ainda hoje, eu chego com sua análise pronta." Não envie como mensagem separada.</p>
+
+  <h3>Como conduzir a reunião</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Cenário</th><th>Como abrir</th><th>O que não fazer</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>A fatura chegou</strong></td>
+        <td>Abrir com <strong>um único achado</strong> da conta dele, nos dois primeiros minutos. Depois seguir a apresentação normalmente.</td>
+        <td>Não apresentar o relatório completo nem o consolidado de economia. Isso é da reunião de fechamento.</td>
+      </tr>
+      <tr>
+        <td><strong>A fatura não chegou</strong></td>
+        <td>Seguir a apresentação padrão e usar as perguntas de diagnóstico para o cliente falar da operação dele.</td>
+        <td>Não cobrar a fatura no início. Pedir no fim, como próximo passo acordado.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Abertura com a fatura em mãos</h4>
+  <div class="script">[Nome], antes de começar: eu olhei a fatura que você mandou.
+
+Sua demanda contratada é [X] kW. No histórico dos últimos 12 meses, o maior valor que vocês usaram foi [Y] kW. Ou seja, tem uma diferença sendo faturada todo mês sem contrapartida de consumo.
+
+Esse é um dos três pontos que eu encontrei. Deixa eu te mostrar como a análise funciona e no fim a gente combina o levantamento completo.</div>
+
+  <div class="note">
+    <p class="nt">Regra do achado único</p>
+    <p>Um achado na primeira reunião, o consolidado na segunda. A cotação com as comercializadoras depende de terceiros e não fica pronta em um dia — entregar tudo na reunião 1 destrói o momento de fechamento e não acelera nada.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ===================== FOLLOW-UP ===================== -->
+
+<hr class="rule">
+
+<section id="followup">
+  <p class="sn">Etapa 8 · Follow-up</p>
+  <h2>Cadência de follow-up</h2>
+  <p class="lede">Para quem não respondeu ou parou de responder no meio da conversa. Cada follow-up traz <strong>um tema novo</strong>, nunca uma cobrança de resposta.</p>
+
+  <div class="note stop">
+    <p class="nt">A regra que define esta etapa</p>
+    <p>"Passando para saber se viu", "conseguiu analisar?" e "alguma novidade?" estão proibidos. Cada mensagem precisa ensinar algo que faça o prospect pensar "será que isso acontece na minha empresa?". Se a mensagem não tem informação nova, ela não é enviada.</p>
+  </div>
+
+  <h3>Calendário de 15 dias</h3>
+  <p>Ciclo completo, do primeiro contato ao encerramento. Se o prospect responder em qualquer ponto, ele <strong>sai da cadência</strong> e a conversa retoma nas Etapas 2 a 6.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Dia</th><th>Toque</th><th>Canal</th><th>Conteúdo</th></tr></thead>
+    <tbody>
+      <tr><td><strong>D0</strong></td><td>Abordagem inicial</td><td>WhatsApp e e-mail</td><td>Etapa 1</td></tr>
+      <tr><td><strong>D1</strong></td><td>Ligação 1</td><td>Telefone</td><td>Roteiro de ligação, período da manhã</td></tr>
+      <tr><td><strong>D3</strong></td><td>Follow-up 1</td><td>WhatsApp e e-mail</td><td>Demanda contratada</td></tr>
+      <tr><td><strong>D5</strong></td><td>Ligação 2</td><td>Telefone</td><td>Roteiro de ligação, período da tarde</td></tr>
+      <tr><td><strong>D8</strong></td><td>Follow-up 2</td><td>WhatsApp e e-mail</td><td>Energia reativa</td></tr>
+      <tr><td><strong>D12</strong></td><td>Follow-up 3</td><td>E-mail</td><td>Ambiente de Contratação Livre</td></tr>
+      <tr><td><strong>D15</strong></td><td>Encerramento</td><td>WhatsApp e e-mail</td><td>Despedida</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Regras do calendário</h4>
+  <ul>
+    <li><strong>Resposta encerra a cadência.</strong> Qualquer retorno tira o prospect da fila de follow-up e devolve para a conversa das Etapas 2 a 6.</li>
+    <li><strong>As duas ligações são em períodos diferentes.</strong> Manhã na primeira, tarde na segunda. Repetir o horário é testar o mesmo cenário duas vezes.</li>
+    <li><strong>"Não temos interesse" encerra na hora</strong>, com a pergunta de saída da biblioteca de objeções. Não se envia o restante da cadência.</li>
+    <li><strong>Cada case em PNG é anexado à mensagem correspondente.</strong> Follow-up sem o case perde a prova, mas ainda funciona — nunca invente número para preencher.</li>
+    <li><strong>Depois do D15, o lead vai para reciclagem em 6 meses.</strong> Não existe oitavo toque.</li>
+    <li><strong>Horários:</strong> 8h30 às 11h ou 14h às 17h. Nunca depois das 18h, nunca fim de semana. Segunda de manhã e sexta à tarde são os piores períodos para decisor industrial.</li>
+  </ul>
+
+  <div class="note warn">
+    <p class="nt">Sobre os cases</p>
+    <p>Use apenas casos reais já executados, sem nome do cliente, sem logotipo e sem documento identificável. O marcador <strong>[INSERIR CASE DE ECONOMIA — PNG]</strong> indica onde a imagem entra.</p>
+  </div>
+
+  <h3>D3 · Follow-up 1 — Demanda contratada</h3>
+  <div class="msg single">
+    <div class="script">Um dos principais pontos que analisamos é a demanda contratada.
+
+Quando ela está acima do necessário, a empresa paga por uma capacidade que não utiliza. Quando está abaixo, pode haver cobrança adicional por ultrapassagem.
+
+Com o histórico da própria fatura, conseguimos comparar o contratado com o utilizado e identificar possíveis distorções.
+
+Se você me enviar uma fatura, eu consigo verificar esse ponto para você.
+
+[INSERIR CASE DE ECONOMIA — PNG]</div>
+    <p class="why"><b>É o follow-up mais forte da cadência</b>, por isso abre. Descreve um custo verificável, dá o critério de verificação e faz um pedido pequeno. É o único dos três que já pede a fatura.</p>
+  </div>
+
+  <h3>D8 · Follow-up 2 — Energia reativa</h3>
+  <div class="msg single">
+    <div class="script">Existe um custo na fatura que muitas empresas acabam pagando sem perceber: a energia reativa. Normalmente aparece na fatura como "Energia Reativa" - "Multa por Energia Reativa".
+
+Com ajustes na instalação essa multa pode ser completamente eliminada
+
+Você sabe se esse custo aparece hoje na fatura?
+
+[INSERIR CASE DE ECONOMIA — PNG]</div>
+    <p class="why"><b>Por que funciona.</b> Nomeia o item exatamente como ele aparece na conta, o que transforma a mensagem em tarefa verificável: o prospect consegue abrir a fatura e conferir em trinta segundos. Quem confere e encontra, responde.</p>
+  </div>
+
+  <h3>D12 · Follow-up 3 — Ambiente de Contratação Livre</h3>
+  <div class="msg single">
+    <div class="script">Outro ponto que analisamos: o preço da energia também pode representar uma oportunidade de economia.
+
+Para empresas elegíveis, essa parcela pode ser contratada no Mercado Livre de Energia, permitindo comparar condições entre diferentes comercializadoras e com isso contratar a energia mais barata.
+
+A distribuidora continua responsável pela rede, manutenção e atendimento. O que muda é a forma de contratação da energia.
+
+[INSERIR CASE DE ECONOMIA — PNG]</div>
+    <p class="why"><b>"Para empresas elegíveis" não é detalhe burocrático.</b> É o que impede a promessa de mercado livre para quem não tem perfil — e o que permite dizer depois, sem constrangimento, que no caso dele não se aplica.</p>
+  </div>
+
+  <h3>D15 · Encerramento — despedida</h3>
+  <p class="lede">Último toque do ciclo. Não cobra nada, entrega e sai. É, na prática, a mensagem com maior taxa de resposta de toda a cadência — quem não respondeu a nada costuma responder a esta.</p>
+  <div class="msg single">
+    <div class="script">Vou encerrar meu contato por aqui para não ser inconveniente.
+
+Só deixo um último ponto: enquadramento tarifário, energia reativa, demanda contratada e preço da energia são custos que podem passar anos sem revisão.
+
+Quando existe uma oportunidade de ajuste, a economia também deixa de acontecer mês após mês.
+
+Se em algum momento fizer sentido revisar isso na [Empresa], fico à disposição.
+
+Obrigado pelo seu tempo.</div>
+    <p class="why"><b>Não reabra a negociação aqui.</b> A força desta mensagem está em não pedir nada. Vendedor que emenda "consegue 15 minutos ainda essa semana?" no fim anula o efeito e vira o incômodo que a primeira linha diz que não quer ser.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="email">
+  <p class="sn">Canal</p>
+  <h2>E-mail de abertura</h2>
+  <p class="lede">Mesma lógica do WhatsApp, com narrativa mais desenvolvida. O CTA pede o telefone. Material gráfico segue em anexo.</p>
+
+  <div class="note warn">
+    <p class="nt">Assunto</p>
+    <p>Nenhum assunto traz percentual, cifrão ou a palavra "economia". Esse é o padrão que filtro de spam e olho treinado descartam juntos. Assunto descritivo, com o nome da empresa quando possível.</p>
+  </div>
+
+  <div class="msg" data-msg="email">
+    <div class="tabs">
+      <button data-v="A" class="on">A · Financeira</button>
+      <button data-v="B">B · Curiosidade</button>
+      <button data-v="C">C · Consultiva</button>
+    </div>
+
+    <div class="pane on" data-v="A">
+      <p class="pill">Assunto</p>
+      <div class="script">Redução de custo de energia — [Empresa]</div>
+      <div class="script" style="margin-top:12px">Olá, [Nome], bom dia.
+
+Sou [Vendedor], da AFB Engenharia &amp; Consultoria Elétrica, empresa de engenharia especializada em subestações e consultoria em energia.
+
+Entro em contato porque ajudamos empresas com fornecimento em média tensão a reduzir, em média, de 10% a 35% o custo da energia, por meio de consultorias e análises técnicas.
+
+E o mais importante: essa redução não depende de obra, instalação de equipamentos ou investimento em CAPEX.
+
+A economia vem da própria análise da estrutura atual da empresa, identificando oportunidades e realizando os ajustes técnicos e contratuais necessários para que ela deixe de pagar por condições que não fazem mais sentido para o seu perfil.
+
+Basicamente, trabalhamos em duas frentes:
+
+1. A forma como sua empresa paga pela energia
+As condições contratadas com a distribuidora muitas vezes foram definidas há anos e permanecem iguais mesmo depois de mudanças na operação, no consumo ou no perfil da empresa.
+Analisamos a fatura, a demanda contratada, a estrutura tarifária e outras condições de fornecimento para identificar oportunidades de redução.
+
+2. O preço da energia
+Também avaliamos o custo da própria energia e as alternativas de contratação disponíveis para o perfil da empresa, comparando as condições atuais com as opções disponíveis no mercado.
+
+A distribuidora continua sendo a mesma. A rede, a manutenção e o atendimento de emergência não mudam.
+Nada precisa ser instalado e a operação da empresa continua normalmente.
+
+A redução vem da gestão: análise dos dados, identificação das oportunidades e realização dos ajustes técnicos e contratuais aplicáveis ao caso.
+
+Para iniciar a análise, precisamos apenas de uma fatura recente. A avaliação inicial é feita sem custo.
+
+O próximo passo é uma conversa de aproximadamente 30 minutos, online ou presencialmente para empresas da região metropolitana de Belo Horizonte. Nessa conversa, apresentamos o método, entendemos o cenário da [Empresa] e verificamos se existe potencial de redução.
+
+Se fizer sentido, me envie seu melhor número de WhatsApp e entro em contato para combinarmos o horário.
+
+Estou deixando em anexo um material explicativo sobre o trabalho.
+
+Fico à disposição,
+[Assinatura]
+[Vendedor]
+AFB Engenharia &amp; Consultoria Elétrica</div>
+      <p class="why"><b>Quando usar.</b> Lead já identificado, ou resposta a quem pediu material por escrito. É a mais completa e a mais longa: entrega escopo, número e as duas frentes detalhadas. Para disparo em volume, o comprimento reduz a leitura — nesse caso prefira a versão B.</p>
+    </div>
+
+    <div class="pane" data-v="B">
+      <p class="pill">Assunto</p>
+      <div class="script">Um item da fatura de energia da [Empresa]</div>
+      <div class="script" style="margin-top:12px">Olá, [Nome], bom dia.
+
+Sou [Vendedor], da AFB Engenharia &amp; Consultoria Elétrica.
+
+Toda empresa atendida em média tensão possui uma demanda contratada com a distribuidora — um valor que faz parte da cobrança mensal e que muitas vezes foi definido quando a instalação entrou em operação.
+
+Só que a empresa muda.
+
+Troca equipamentos, altera turnos, aumenta ou reduz a produção, tira máquinas de linha... e, muitas vezes, essa contratação permanece igual por anos.
+
+Esse é um dos pontos que analisamos — e não é o único.
+
+Também verificamos se o modelo de cobrança e as condições tarifárias continuam adequados ao perfil atual de consumo da empresa.
+
+Além disso, avaliamos o preço da própria energia e, quando aplicável ao perfil da empresa, comparamos as condições disponíveis junto às principais comercializadoras do mercado.
+
+Pode ser que na [Empresa] não exista nada relevante para ajustar. Acontece — e, quando acontece, nós dizemos.
+
+Mas, se houver alguma oportunidade, pode ser um custo que vem sendo pago todos os meses simplesmente porque nunca foi revisado.
+
+Para verificar, precisamos apenas de uma fatura recente.
+
+A análise é gratuita e não envolve obra, investimento em CAPEX ou qualquer mudança na operação da empresa. A distribuidora continua a mesma, assim como a rede e o atendimento.
+
+Toda a economia identificada vem da análise técnica, revisão das condições de contratação e dos ajustes aplicáveis ao perfil da empresa.
+
+Vale uma conversa de 30 minutos para descobrir de que lado a sua empresa está?
+
+Se fizer sentido, me envie seu melhor número de WhatsApp e entro em contato para marcarmos.
+
+Segue em anexo um material explicativo sobre o trabalho.
+
+Atenciosamente,
+[Assinatura]</div>
+      <p class="why"><b>Quando usar.</b> Lead de valor alto. Abre com o problema, não com a empresa: as três primeiras linhas descrevem uma situação concreta antes de qualquer apresentação institucional, o que reduz a chance de ser lido como e-mail comercial. A frase que admite que pode não haver economia é o que dá credibilidade ao resto.</p>
+    </div>
+
+    <div class="pane" data-v="C">
+      <p class="pill">Assunto</p>
+      <div class="script">Análise técnica de fatura — empresas em média tensão</div>
+      <div class="script" style="margin-top:12px">Olá, [Nome], bom dia.
+
+Sou [Vendedor], da AFB Engenharia &amp; Consultoria Elétrica.
+
+Somos uma empresa de engenharia elétrica especializada em subestações de média e alta tensão e em consultoria de energia. Nosso diretor técnico é engenheiro eletricista, com 11 anos de experiência na CEMIG, incluindo atuação na área de expansão de ativos de alta tensão.
+
+Energia é um custo relevante para qualquer indústria, mas muitas vezes não recebe a mesma atenção dedicada a matéria-prima, frete ou folha. Esses custos são constantemente negociados e revisados; a conta de energia, muitas vezes, simplesmente chega e é paga.
+
+É justamente aí que podem existir oportunidades.
+
+Nosso trabalho atua em duas frentes:
+
+Análise técnica da fatura
+Verificamos se o que sua empresa contratou com a distribuidora continua compatível com o perfil atual de consumo e operação, além de avaliar se a estrutura tarifária e as condições de fornecimento continuam adequadas.
+
+Cotação da energia
+Comparamos o custo atual da energia com as condições disponíveis junto às principais comercializadoras do país, considerando o perfil e as características de consumo da empresa.
+
+As duas análises se complementam. Nos casos em que identificamos oportunidades nas duas frentes, o potencial de redução pode ser significativo. Nas análises que realizamos, já identificamos reduções na faixa de 10% a 35% do custo da energia, dependendo do perfil e das condições de cada empresa.
+
+E isso sem obra, sem investimento em CAPEX e sem alteração na operação. A distribuidora permanece a mesma, assim como a rede, a manutenção e o atendimento de emergência.
+
+A análise inicial é feita sem custo e exige apenas uma fatura recente.
+
+Proponho uma conversa de 30 minutos para apresentar o método, entender o cenário da [Empresa] e verificar se existe potencial de redução no seu caso.
+
+Podemos fazer online ou presencialmente, se vocês estiverem na região metropolitana de Belo Horizonte.
+
+Para agendarmos, me envie seu melhor número de WhatsApp e entro em contato para combinarmos o horário.
+
+Em anexo, envio um material com o detalhamento do processo.
+
+Cordialmente,
+[Assinatura]</div>
+      <p class="why"><b>Quando usar.</b> Diretor e proprietário de empresa de porte, especialmente quando o e-mail será encaminhado internamente — é a única que aguenta ser lida por terceiros sem contexto.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <p class="nt">Assinatura padrão</p>
+    <p>Nome · Consultor Comercial · AFB Engenharia &amp; Consultoria Elétrica · telefone · site. Sem frase motivacional, sem banner, sem imagem pesada.</p>
+    <p>As três versões são assinadas pelo vendedor, com o diretor técnico em terceira pessoa. Se o envio for feito pelo próprio engenheiro consultor, a variação C ganha força e a redação passa para primeira pessoa.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ===================== LIGAÇÃO ===================== -->
+<section id="ligacao">
+  <p class="sn">Canal</p>
+  <h2>Roteiro de ligação</h2>
+  <p class="lede">Usado quando o WhatsApp não foi respondido. Três momentos: recepção, abertura com o decisor e fechamento de agenda.</p>
+
+  <h3>1 · Recepção / triagem</h3>
+  <div class="script">Bom dia. Aqui é [Vendedor], da AFB Engenharia, consultoria de engenharia elétrica.
+
+Queria falar com o responsável pela área de energia da empresa. Quem seria?</div>
+
+  <h4>Se perguntarem do que se trata</h4>
+  <div class="script">Olá, [Nome]. É sobre a gestão da fatura de energia da [Empresa].
+
+Fazemos uma análise técnica da demanda contratada, modalidade tarifária e demais condições de fornecimento para identificar oportunidades de redução de custos.
+
+Preciso de dois minutos com quem responde por essa parte na empresa. É você ou consegue me indicar quem cuida disso?</div>
+
+  <div class="note stop">
+    <p class="nt">Na recepção, nunca</p>
+    <p>"É sobre uma proposta", "é uma oferta", "queria apresentar nossos serviços". Qualquer uma dessas expressões encerra a ligação antes de chegar ao decisor.</p>
+  </div>
+
+  <h3>2 · Abertura com o decisor</h3>
+  <p>Os primeiros 15 segundos decidem a ligação. Peça permissão e <strong>pare de falar</strong> até ele responder.</p>
+  <div class="script">[Nome], bom dia. Aqui é [Vendedor], da AFB Engenharia &amp; Consultoria Elétrica.
+
+Te tomo um minuto e você me diz se faz sentido continuar, pode ser?
+
+[pausa — esperar a resposta]
+
+A gente faz análise técnica de faturas de energia de empresas atendidas em média tensão.
+
+Olhamos a demanda contratada, a modalidade tarifária, as condições de fornecimento e o preço da energia para identificar se existe alguma oportunidade de reduzir esse custo.
+
+E é importante dizer que não estamos falando de instalar nada: não vendemos equipamento, não tem obra e não exige investimento da sua parte.
+
+A ideia é simplesmente verificar se a empresa está pagando pela energia nas condições mais adequadas para a operação atual.</div>
+
+  <h3>3 · Pergunta de diagnóstico</h3>
+  <p>Uma pergunta, no máximo duas. Escolha uma:</p>
+  <ul>
+    <li>"Hoje alguém aí acompanha esses números, ou a conta chega e é paga?"</li>
+    <li>"O que vocês contrataram de energia com a distribuidora já foi revisado alguma vez desde que a subestação entrou?"</li>
+    <li>"Vocês já chegaram a olhar mercado livre, ou continuam comprando só da distribuidora?"</li>
+  </ul>
+  <div class="note">
+    <p>Escute a resposta inteira. É nela que está o gancho. Se ele disser "isso quem vê é o contador", você já sabe que ninguém faz análise técnica — e esse é exatamente o argumento.</p>
+  </div>
+
+  <h3>4 · Fechamento de agenda</h3>
+  <div class="script">O que eu proponho é o seguinte:
+
+Marcamos 30 minutos. Eu te mostro como a análise é feita, o que normalmente encontramos e onde podem existir oportunidades de redução.
+
+E, se você me enviar uma fatura antes, eu já chego na conversa com os pontos específicos da [Empresa], em vez de ficar falando em tese.
+
+Consigo [DIA] às [HORA] ou [DIA] às [HORA]. Qual dos dois fica melhor para você?</div>
+
+  <h3>Se cair na caixa postal</h3>
+  <div class="script">[Nome], aqui é [Vendedor], da AFB Engenharia &amp; Consultoria Elétrica. Liguei por causa da fatura de energia da [Empresa]. Te mandei uma mensagem no WhatsApp deste número com o resumo. Obrigado.</div>
+  <p class="why">Deixe o recado e mande o WhatsApp em seguida, referenciando a ligação. O recado sozinho quase nunca gera retorno; o par recado + mensagem, sim.</p>
+</section>
+
+<hr class="rule">
+
+<!-- ===================== OBJEÇÕES ===================== -->
+<section id="objecoes">
+  <p class="sn">Apoio</p>
+  <h2>Biblioteca de objeções</h2>
+  <p class="lede">Estrutura de resposta em todos os casos: reconhecer sem discutir → reenquadrar com informação → devolver o convite.</p>
+
+  <details class="obj">
+    <summary>"Isso é energia solar?"</summary>
+    <div class="body">
+      <p class="behind">Por trás: ele já foi abordado por vendedor de usina e está triando.</p>
+      <div class="script">Não. Você não compra usina, não instala painel, não financia equipamento e não tem obra na sua planta.
+
+Somos engenharia elétrica. O que fazemos é análise técnica da fatura e do contrato de energia. Redução de custo sem investimento.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Quanto custa?"</summary>
+    <div class="body">
+      <p class="behind">Por trás: ele quer saber onde está a pegadinha do gratuito. Transparência total é o que constrói confiança aqui.</p>
+      <div class="script">Nesta campanha, nada. O estudo é gratuito e você recebe o relatório completo.
+
+Somos remunerados pela comercializadora quando o cliente decide migrar a contratação da energia. Se a análise mostrar que migrar não compensa no seu caso, a gente te diz isso — e o relatório é seu do mesmo jeito.
+
+Se aparecer necessidade de serviço de engenharia em campo, aí sim vai uma proposta separada, e nada é executado sem sua aprovação.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Já temos uma consultoria" / "Já estamos no mercado livre"</summary>
+    <div class="body">
+      <p class="behind">Pode ser verdade, pode ser escudo. Nos dois casos a resposta é a mesma, e é forte.</p>
+      <div class="script">Ótimo, então metade do caminho já foi feita.
+
+Só que a migração resolve o preço da energia. Ela não mexe no que foi contratado com a distribuidora nem no modelo de cobrança, que continuam na parte regulada da fatura.
+
+É comum a gente encontrar oportunidade justamente em cliente que já migrou. Se quiser, eu olho essa parte. Trinta minutos.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"E se eu quiser voltar atrás? Vou ficar preso em contrato?"</summary>
+    <div class="body">
+      <p class="behind">A maior objeção do mercado livre. Aqui temos um argumento real.</p>
+      <div class="script">Depende do produto, e essa é justamente uma das coisas que a gente avalia.
+
+Existem modelos sem carência nenhuma. O mercado livre tradicional tem prazo contratual, que varia conforme a negociação.
+
+Na apresentação a gente coloca as opções lado a lado com prazo, preço e risco, e você escolhe. Não somos nós que definimos isso por você.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Vou ter que trocar de distribuidora? E se faltar energia?"</summary>
+    <div class="body">
+      <p class="behind">Medo operacional. Continuidade vale mais que economia para gestor industrial.</p>
+      <div class="script">Nada muda na operação. O fio continua sendo da distribuidora, a manutenção da rede continua com ela e o atendimento de emergência também.
+
+O que muda é de quem você compra a energia. A parte física não se move e não tem interrupção nenhuma na sua produção.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Não tenho tempo agora"</summary>
+    <div class="body">
+      <p class="behind">Prioridade, não agenda. Não insista no mesmo dia.</p>
+      <div class="script">Entendo. Por isso são 30 minutos e não uma tarde.
+
+Prefere [dia da semana que vem] de manhã ou no fim da tarde? Eu me adapto ao seu horário.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Preciso falar com meu sócio / com a diretoria"</summary>
+    <div class="body">
+      <p class="behind">Ou é verdade, ou ele não quer decidir sozinho. Nos dois casos, traga a outra pessoa para dentro.</p>
+      <div class="script">Faz sentido. Chama ele para a conversa, então — assim vocês ouvem juntos e ninguém precisa repassar depois.
+
+Qual o melhor horário para os dois?</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Não temos interesse"</summary>
+    <div class="body">
+      <p class="behind">Encerrar com elegância, mas deixar uma pergunta que às vezes reabre a porta.</p>
+      <div class="script">Sem problema, [Nome]. Obrigado pela franqueza.
+
+Só uma pergunta antes de encerrar, por curiosidade técnica: o que vocês contrataram de energia com a distribuidora já foi revisado alguma vez desde que a subestação entrou em operação?</div>
+      <p class="why">Se a resposta for "não" ou "não sei", há abertura. Se for "sim, revisamos ano passado", agradeça e encerre de verdade.</p>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Como vocês vão ter acesso à minha conta? Isso é seguro?"</summary>
+    <div class="body">
+      <p class="behind">Receio com dado e com procuração.</p>
+      <div class="script">Para a análise, só preciso da fatura em PDF — o mesmo documento que você recebe todo mês. Nada além disso.
+
+Procuração junto à distribuidora só entra depois, se você aprovar algum ajuste que exija solicitação formal. E isso é sempre com assinatura sua, item por item.</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Manda mais informação por escrito"</summary>
+    <div class="body">
+      <p class="behind">Pode ser interesse real ou forma educada de adiar. Atenda e devolva o convite.</p>
+      <div class="script">Mando sim, te envio nosso material.
+
+Só te adianto que ele sozinho não diz nada sobre a [Empresa] — explica o método. O que interessa mesmo são os números da sua fatura, e isso a gente só vê olhando.
+
+Te mando agora e marcamos 30 minutos para eu passar pelo que for relevante no seu caso. Prefere [dia] ou [dia]?</div>
+    </div>
+  </details>
+
+  <details class="obj">
+    <summary>"Não sou eu quem cuida disso"</summary>
+    <div class="body">
+      <p class="behind">Melhor resposta possível em prospecção fria: ele está te dando o caminho.</p>
+      <div class="script">Entendi, obrigado por avisar. Quem responde pela energia aí na [Empresa]?
+
+Se puder me passar o nome eu falo direto com a pessoa, sem te incomodar mais.</div>
+    </div>
+  </details>
+</section>
+
+<hr class="rule">
+
+<!-- ===================== NUNCA ===================== -->
+<section id="nunca">
+  <p class="sn">Apoio</p>
+  <h2>O que nunca dizer</h2>
+  <div class="note stop">
+    <ul style="margin-bottom:0">
+      <li>Prometer percentual para aquele cliente antes da análise.</li>
+      <li>Dizer que somos credenciados pela CEMIG como distribuidora. Trabalhamos com comercializadoras.</li>
+      <li>"Oportunidade imperdível", "condição especial só hoje", "últimas vagas".</li>
+      <li>Puxar o assunto energia solar.</li>
+      <li>Prometer "sem burocracia" — o processo tem contrato e procuração.</li>
+      <li>Oferecer manutenção, ensaio, termografia ou serviço de subestação na abordagem.</li>
+      <li>"Tudo bem?" como abertura de mensagem fria.</li>
+      <li>Emoji em mensagem comercial. Nenhum.</li>
+      <li>Áudio no primeiro contato.</li>
+      <li>Mais de uma chamada para ação na mesma mensagem.</li>
+      <li>Mandar duas ou três mensagens seguidas antes de ele responder à primeira.</li>
+      <li>Falar mal da distribuidora, do concorrente ou de outra consultoria.</li>
+      <li>Afirmar que a empresa está "pagando a mais" antes de ver a fatura. O correto é "pode haver custo evitável".</li>
+    </ul>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ===================== MÉTRICAS ===================== -->
+<section id="metricas">
+  <p class="sn">Apoio</p>
+  <h2>Métricas de controle</h2>
+  <p class="lede">Cada vendedor registra estes cinco números por semana. Sem isso não é possível saber qual variação funciona.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Indicador</th><th>Como medir</th><th>O que indica quando está baixo</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Taxa de resposta</strong></td><td>Respostas ÷ leads contatados</td><td>A Etapa 1 está errada, ou a lista está errada</td></tr>
+      <tr><td><strong>Avanço na sequência</strong></td><td>Leads que chegaram à Etapa 5 ÷ leads que responderam</td><td>Alguma etapa do meio está perdendo gente — verificar qual</td></tr>
+      <tr><td><strong>Taxa de agendamento</strong></td><td>Reuniões marcadas ÷ leads que responderam</td><td>O convite está fraco ou o vendedor não fecha horário</td></tr>
+      <tr><td><strong>Captação da fatura</strong></td><td>Faturas recebidas ÷ reuniões marcadas</td><td>A mensagem de confirmação não está sendo enviada</td></tr>
+      <tr><td><strong>Comparecimento</strong></td><td>Reuniões realizadas ÷ marcadas</td><td>Falta o lembrete de 24h, ou o agendamento está longe demais da data do sim</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <p class="nt">Teste controlado</p>
+    <p>Cada vendedor usa uma única variação da Etapa 1 por semana, com no mínimo 30 envios, antes de trocar. Alternar variações dentro do mesmo lote impede qualquer leitura de resultado.</p>
+  </div>
+</section>
+
+<hr class="rule">
+
+<!-- ===================== PENDENTE ===================== -->
+
+<hr class="rule">
+
+<section id="pendente">
+  <p class="sn">Status</p>
+  <h2>Em desenvolvimento</h2>
+  <p class="lede">Etapas do funil ainda não fechadas. Serão incorporadas a este documento quando aprovadas.</p>
+  <ul>
+    <li><strong>Critério de qualificação.</strong> Quais empresas entram no funil: porte mínimo de fatura, perfil de operação e região.</li>
+    <li><strong>Reordenação da apresentação comercial.</strong> Ajuste da sequência de slides da reunião de 30 minutos.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>AFB Engenharia &amp; Consultoria Elétrica · Documento interno de treinamento comercial · Versão 6 · Uso restrito à equipe</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var root=document.documentElement, tbtn=document.getElementById("themebtn");
+  try{ var saved=localStorage.getItem("afb-theme"); if(saved){ root.setAttribute("data-theme",saved); } }catch(e){}
+  tbtn.addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme"), next;
+    if(cur==="dark"){ next="light"; }
+    else if(cur==="light"){ next="dark"; }
+    else { next = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark"; }
+    root.setAttribute("data-theme",next);
+    try{ localStorage.setItem("afb-theme",next); }catch(e){}
+  });
+
+  var cards=document.querySelectorAll(".msg");
+  for(var c=0;c<cards.length;c++){
+    (function(card){
+      var tabsbar=card.querySelector(".tabs");
+      if(!tabsbar) return;
+      tabsbar.addEventListener("click",function(ev){
+        var b=ev.target.closest("button");
+        if(!b) return;
+        var v=b.getAttribute("data-v");
+        var tabs=card.querySelectorAll(".tabs button");
+        var panes=card.querySelectorAll(".pane");
+        for(var j=0;j<tabs.length;j++){ tabs[j].classList.toggle("on", tabs[j].getAttribute("data-v")===v); }
+        for(var k=0;k<panes.length;k++){ panes[k].classList.toggle("on", panes[k].getAttribute("data-v")===v); }
+      });
+    })(cards[c]);
+  }
+
+  var scripts=document.querySelectorAll(".script");
+  for(var s=0;s<scripts.length;s++){
+    (function(el){
+      var txt=el.innerText.trim();
+      var btn=document.createElement("button");
+      btn.className="copy"; btn.type="button"; btn.textContent="Copiar";
+      btn.addEventListener("click",function(){
+        var done=function(){
+          btn.textContent="Copiado"; btn.classList.add("done");
+          setTimeout(function(){ btn.textContent="Copiar"; btn.classList.remove("done"); },1600);
+        };
+        function fallback(){
+          try{
+            var ta=document.createElement("textarea");
+            ta.value=txt; ta.style.position="fixed"; ta.style.opacity="0";
+            document.body.appendChild(ta); ta.select();
+            document.execCommand("copy"); document.body.removeChild(ta); done();
+          }catch(e){ btn.textContent="Selecione e copie"; }
+        }
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(txt).then(done, fallback);
+        } else { fallback(); }
+      });
+      el.classList.add("hascopy");
+      el.appendChild(btn);
+    })(scripts[s]);
+  }
+
+  var links=document.querySelectorAll("#nav a"), secs=[];
+  for(var l=0;l<links.length;l++){
+    var sec=document.getElementById(links[l].getAttribute("href").slice(1));
+    if(sec){ secs.push({link:links[l], sec:sec}); }
+  }
+  function onScroll(){
+    var y=window.scrollY+140, active=null;
+    for(var i=0;i<secs.length;i++){ if(secs[i].sec.offsetTop<=y){ active=secs[i]; } }
+    for(var j=0;j<secs.length;j++){ secs[j].link.classList.toggle("on", active && secs[j]===active); }
+  }
+  window.addEventListener("scroll",onScroll,{passive:true});
+  onScroll();
+})();
+</script>
+</body>
+</html>

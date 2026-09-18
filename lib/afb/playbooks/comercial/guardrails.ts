@@ -1,0 +1,351 @@
+/**
+ * afb_comercial_v1 — guardrails: as regras do playbook em forma consultável.
+ *
+ * Três origens, três severidades:
+ *   `nunca`   — a lista "O que nunca dizer", item a item.
+ *   `regra`   — princípios inegociáveis e regras de processo (sequência,
+ *               follow-up, reunião, horários).
+ *   `atencao` — notas de cuidado presas a uma copy específica.
+ *
+ * `termosDeAlerta` só existe onde o PRÓPRIO playbook nomeia a expressão
+ * proibida — o copiloto usa para avisar, nunca para bloquear. Ids são
+ * referenciados pelas etapas (`whatsapp.ts`); o teste garante que toda
+ * referência resolve.
+ */
+import type { Guardrail } from "../types";
+
+export const GUARDRAILS: readonly Guardrail[] = [
+  // ─── O que nunca dizer ───────────────────────────────────────────────────
+  {
+    id: "nunca.prometer_percentual",
+    categoria: "promessas",
+    severidade: "nunca",
+    regra: "Prometer percentual para aquele cliente antes da análise.",
+    origem: "O que nunca dizer",
+  },
+  {
+    id: "nunca.credenciado_pela_distribuidora",
+    categoria: "distribuidora",
+    severidade: "nunca",
+    regra: "Dizer que somos credenciados pela CEMIG como distribuidora. Trabalhamos com comercializadoras.",
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["credenciado", "credenciados", "credenciada"],
+  },
+  {
+    id: "nunca.urgencia_artificial",
+    categoria: "linguagem",
+    severidade: "nunca",
+    regra: '"Oportunidade imperdível", "condição especial só hoje", "últimas vagas".',
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["imperdível", "só hoje", "últimas vagas"],
+  },
+  {
+    id: "nunca.puxar_solar",
+    categoria: "energia_solar",
+    severidade: "nunca",
+    regra: "Puxar o assunto energia solar.",
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["solar", "painel", "painéis", "usina"],
+  },
+  {
+    id: "nunca.sem_burocracia",
+    categoria: "promessas",
+    severidade: "nunca",
+    regra: 'Prometer "sem burocracia" — o processo tem contrato e procuração.',
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["sem burocracia"],
+  },
+  {
+    id: "nunca.oferecer_subestacao",
+    categoria: "subestacao",
+    severidade: "nunca",
+    regra: "Oferecer manutenção, ensaio, termografia ou serviço de subestação na abordagem.",
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["termografia", "ensaio", "manutenção"],
+  },
+  {
+    id: "nunca.tudo_bem_como_abertura",
+    categoria: "linguagem",
+    severidade: "nunca",
+    regra: '"Tudo bem?" como abertura de mensagem fria.',
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["tudo bem?"],
+  },
+  {
+    id: "nunca.emoji",
+    categoria: "emojis",
+    severidade: "nunca",
+    regra: "Emoji em mensagem comercial. Nenhum.",
+    origem: "O que nunca dizer",
+  },
+  {
+    id: "nunca.audio_no_primeiro_contato",
+    categoria: "audio",
+    severidade: "nunca",
+    regra: "Áudio no primeiro contato.",
+    origem: "O que nunca dizer",
+  },
+  {
+    id: "nunca.mais_de_uma_cta",
+    categoria: "cta",
+    severidade: "nunca",
+    regra: "Mais de uma chamada para ação na mesma mensagem.",
+    origem: "O que nunca dizer",
+  },
+  {
+    id: "nunca.mensagens_seguidas_sem_resposta",
+    categoria: "sequencia_de_mensagens",
+    severidade: "nunca",
+    regra: "Mandar duas ou três mensagens seguidas antes de ele responder à primeira.",
+    origem: "O que nunca dizer",
+  },
+  {
+    id: "nunca.falar_mal",
+    categoria: "linguagem",
+    severidade: "nunca",
+    regra: "Falar mal da distribuidora, do concorrente ou de outra consultoria.",
+    origem: "O que nunca dizer",
+  },
+  {
+    id: "nunca.pagando_a_mais_antes_da_fatura",
+    categoria: "promessas",
+    severidade: "nunca",
+    regra: 'Afirmar que a empresa está "pagando a mais" antes de ver a fatura. O correto é "pode haver custo evitável".',
+    origem: "O que nunca dizer",
+    termosDeAlerta: ["pagando a mais"],
+  },
+
+  // ─── Princípios inegociáveis ─────────────────────────────────────────────
+  {
+    id: "principio.uma_cta",
+    categoria: "cta",
+    severidade: "regra",
+    regra: "Uma única chamada para ação: a reunião de 30 minutos. Nunca oferecer duas coisas na mesma mensagem.",
+    origem: "Princípios inegociáveis · 1",
+  },
+  {
+    id: "principio.faixa_e_historico",
+    categoria: "promessas",
+    severidade: "regra",
+    regra: 'A faixa de 10% a 35% é histórico, não promessa. A formulação correta é "temos encontrado economias típicas entre 10% e 35%". Nunca "você vai reduzir 30%".',
+    origem: "Princípios inegociáveis · 2",
+    termosDeAlerta: ["você vai reduzir", "vai economizar"],
+  },
+  {
+    id: "principio.engenharia_nao_vendedor",
+    categoria: "postura",
+    severidade: "regra",
+    regra: "Não somos vendedores de energia. Somos engenharia. Analisamos a instalação e o contrato — não apenas cotamos preço de kWh.",
+    origem: "Princípios inegociáveis · 3",
+  },
+  {
+    id: "principio.solar_so_se_perguntarem",
+    categoria: "energia_solar",
+    severidade: "regra",
+    regra: 'A palavra "solar" nunca é puxada por nós. Se o cliente perguntar, respondemos com clareza (ver objeções).',
+    origem: "Princípios inegociáveis · 4",
+  },
+  {
+    id: "principio.comercializadoras_nao_credenciamento",
+    categoria: "distribuidora",
+    severidade: "regra",
+    regra: "Nada de credenciamento com a distribuidora. Trabalhamos com as principais comercializadoras do país: CEMIG, Shell Energy, Enel, Comerc Energia, Prime Energy, Origo e Energisa.",
+    origem: "Princípios inegociáveis · 5",
+  },
+  {
+    id: "principio.fatura_na_etapa_7",
+    categoria: "fatura",
+    severidade: "regra",
+    regra: "A fatura é pedida na Etapa 7, depois do sim à reunião. Nunca no primeiro contato.",
+    origem: "Princípios inegociáveis · 6",
+  },
+  {
+    id: "principio.sem_manutencao_nem_subestacao",
+    categoria: "subestacao",
+    severidade: "regra",
+    regra: "Manutenção e subestação não entram na abordagem. Se o cliente puxar, confirmamos que fazemos e voltamos ao tema da fatura.",
+    origem: "Princípios inegociáveis · 7",
+  },
+  {
+    id: "principio.diretor_em_terceira_pessoa",
+    categoria: "postura",
+    severidade: "regra",
+    regra: "Falamos em nome da AFB. O vendedor usa o diretor técnico como credencial em terceira pessoa.",
+    origem: "Princípios inegociáveis · 8",
+  },
+  {
+    id: "principio.follow_up_traz_informacao_nova",
+    categoria: "follow_up",
+    severidade: "regra",
+    regra: 'Cada follow-up traz informação nova. "Passando para saber se viu", "conseguiu analisar?" e "alguma novidade?" estão proibidos.',
+    origem: "Princípios inegociáveis · 9",
+    termosDeAlerta: ["passando para saber", "conseguiu analisar", "alguma novidade"],
+  },
+
+  // ─── Regras de processo ──────────────────────────────────────────────────
+  {
+    id: "regra.conversa_nao_disparo",
+    categoria: "sequencia_de_mensagens",
+    severidade: "regra",
+    regra: "A sequência de seis mensagens é uma conversa, não um disparo. Cada mensagem só é enviada depois que o cliente respondeu à anterior. Mandar duas ou três seguidas sem resposta queima o contato e queima a lista.",
+    origem: "Como usar este playbook · Regra que não se quebra",
+  },
+  {
+    id: "regra.placeholder_preenchido",
+    categoria: "sequencia_de_mensagens",
+    severidade: "regra",
+    regra: "Copie, substitua os campos entre colchetes e revise antes de enviar — mensagem com [Nome] não preenchido encerra a conversa antes de ela começar.",
+    origem: "Como usar este playbook",
+  },
+  {
+    id: "regra.uma_pergunta_so",
+    categoria: "sequencia_de_mensagens",
+    severidade: "regra",
+    regra: "Uma pergunta só. Pergunta múltipla no WhatsApp é respondida pela metade ou não é respondida. E pergunta que expõe ignorância faz o gestor sumir em vez de admitir que não sabe.",
+    origem: "WhatsApp · Etapa 2",
+  },
+  {
+    id: "regra.gratuidade_fica_para_a_reuniao",
+    categoria: "fatura",
+    severidade: "regra",
+    regra: "O motivo da gratuidade ficou de fora de propósito. Explicar que a remuneração vem da comercializadora abre discussão sobre modelo de negócio no meio de uma mensagem que serve para tirar objeções. Isso entra na reunião, na hora do preço. Se o cliente perguntar antes, use a resposta completa em objeções.",
+    origem: "WhatsApp · Etapa 4",
+  },
+  {
+    id: "regra.enviar_e_esperar",
+    categoria: "sequencia_de_mensagens",
+    severidade: "regra",
+    regra: "Enviar e esperar. Esta é a única mensagem da sequência que exige silêncio depois. Se a resposta for evasiva ou não vier em 24h, não repita a pergunta. Vá direto para a Etapa 6.",
+    origem: "WhatsApp · Etapa 5",
+  },
+  {
+    id: "regra.duas_opcoes_de_horario",
+    categoria: "cta",
+    severidade: "regra",
+    regra: 'Sempre duas opções concretas de dia e hora. Nunca "quando você puder".',
+    origem: "Como usar este playbook · Campos a preencher",
+    termosDeAlerta: ["quando você puder", "quando puder"],
+  },
+  {
+    id: "regra.relatorio_apresentado_nao_enviado",
+    categoria: "relatorio",
+    severidade: "regra",
+    regra: "Apresentamos, não enviamos. Se o vendedor prometer mandar por e-mail, o cliente recebe, agradece e some — e a reunião de fechamento se perde. O relatório é apresentado na segunda reunião e entregue ali.",
+    origem: "WhatsApp · Etapa 6",
+  },
+  {
+    id: "regra.achado_unico",
+    categoria: "relatorio",
+    severidade: "regra",
+    regra: "A regra do achado único: um ponto da fatura na primeira reunião. O relatório completo e o consolidado de economia ficam para a segunda.",
+    origem: "WhatsApp · Etapa 6 / Etapa 7",
+  },
+  {
+    id: "regra.nao_cobrar_fatura_no_inicio",
+    categoria: "fatura",
+    severidade: "regra",
+    regra: "Se a fatura não chegou: não cobrar a fatura no início da reunião. Pedir no fim, como próximo passo acordado.",
+    origem: "Etapa 7 · Como conduzir a reunião",
+  },
+  {
+    id: "regra.lembrete_sem_fatura_na_mesma_mensagem",
+    categoria: "fatura",
+    severidade: "regra",
+    regra: 'Se a fatura ainda não chegou, acrescente uma linha ao lembrete: "Se conseguir me mandar a fatura ainda hoje, eu chego com sua análise pronta." Não envie como mensagem separada.',
+    origem: "Etapa 7 · Lembrete",
+  },
+  {
+    id: "regra.resposta_encerra_cadencia",
+    categoria: "follow_up",
+    severidade: "regra",
+    regra: "Resposta encerra a cadência. Qualquer retorno tira o prospect da fila de follow-up e devolve para a conversa das Etapas 2 a 6.",
+    origem: "Follow-up · Regras do calendário",
+  },
+  {
+    id: "regra.ligacoes_em_periodos_diferentes",
+    categoria: "horarios",
+    severidade: "regra",
+    regra: "As duas ligações são em períodos diferentes. Manhã na primeira, tarde na segunda. Repetir o horário é testar o mesmo cenário duas vezes.",
+    origem: "Follow-up · Regras do calendário",
+  },
+  {
+    id: "regra.sem_interesse_encerra",
+    categoria: "follow_up",
+    severidade: "regra",
+    regra: '"Não temos interesse" encerra na hora, com a pergunta de saída da biblioteca de objeções. Não se envia o restante da cadência.',
+    origem: "Follow-up · Regras do calendário",
+  },
+  {
+    id: "regra.case_real_ou_nenhum",
+    categoria: "cases",
+    severidade: "regra",
+    regra: "Cada case em PNG é anexado à mensagem correspondente. Follow-up sem o case perde a prova, mas ainda funciona — nunca invente número para preencher. Use apenas casos reais já executados, sem nome do cliente, sem logotipo e sem documento identificável.",
+    origem: "Follow-up · Regras do calendário / Sobre os cases",
+  },
+  {
+    id: "regra.sem_oitavo_toque",
+    categoria: "follow_up",
+    severidade: "regra",
+    regra: "Depois do D15, o lead vai para reciclagem em 6 meses. Não existe oitavo toque.",
+    origem: "Follow-up · Regras do calendário",
+  },
+  {
+    id: "regra.janela_de_horarios",
+    categoria: "horarios",
+    severidade: "regra",
+    regra: "Horários: 8h30 às 11h ou 14h às 17h. Nunca depois das 18h, nunca fim de semana. Segunda de manhã e sexta à tarde são os piores períodos para decisor industrial.",
+    origem: "Follow-up · Regras do calendário",
+  },
+  {
+    id: "regra.nao_reabrir_no_encerramento",
+    categoria: "follow_up",
+    severidade: "regra",
+    regra: 'Não reabra a negociação no encerramento. A força desta mensagem está em não pedir nada. Vendedor que emenda "consegue 15 minutos ainda essa semana?" no fim anula o efeito.',
+    origem: "Follow-up · D15",
+  },
+  {
+    id: "regra.mercado_livre_so_para_elegiveis",
+    categoria: "mercado_livre",
+    severidade: "regra",
+    regra: '"Para empresas elegíveis" não é detalhe burocrático. É o que impede a promessa de mercado livre para quem não tem perfil — e o que permite dizer depois, sem constrangimento, que no caso dele não se aplica.',
+    origem: "Follow-up · D12",
+  },
+  {
+    id: "regra.assunto_de_email",
+    categoria: "linguagem",
+    severidade: "regra",
+    regra: 'Nenhum assunto traz percentual, cifrão ou a palavra "economia". Assunto descritivo, com o nome da empresa quando possível.',
+    origem: "E-mail · Assunto",
+  },
+  {
+    id: "regra.na_recepcao_nunca",
+    categoria: "linguagem",
+    severidade: "regra",
+    regra: 'Na recepção, nunca: "É sobre uma proposta", "é uma oferta", "queria apresentar nossos serviços". Qualquer uma dessas expressões encerra a ligação antes de chegar ao decisor.',
+    origem: "Ligação · Recepção",
+    termosDeAlerta: ["é sobre uma proposta", "é uma oferta", "apresentar nossos serviços"],
+  },
+  {
+    id: "regra.pedir_permissao_e_parar",
+    categoria: "postura",
+    severidade: "regra",
+    regra: "Os primeiros 15 segundos decidem a ligação. Peça permissão e pare de falar até ele responder.",
+    origem: "Ligação · Abertura com o decisor",
+  },
+
+  // ─── Atenções presas a copies ────────────────────────────────────────────
+  {
+    id: "atencao.afirmacao_categorica_kwh",
+    categoria: "promessas",
+    severidade: "atencao",
+    regra: '"Conseguimos ofertar um custo por kW/h muito menor do que o praticado" é a única afirmação categórica do funil, e é feita antes da cotação. Se em algum caso a comercializadora não bater o preço da distribuidora, é a frase que o cliente vai lembrar na reunião de fechamento. Use com consciência disso.',
+    origem: "WhatsApp · Etapa 3",
+  },
+  {
+    id: "atencao.trocar_distribuidora",
+    categoria: "distribuidora",
+    severidade: "atencao",
+    regra: "As copies citam a CEMIG como distribuidora — versão para Minas Gerais. Para prospect atendido por outra distribuidora, troque o nome antes de enviar, senão a frase erra na cara do cliente.",
+    origem: "Como usar este playbook · Área de concessão / Etapa 4",
+  },
+];

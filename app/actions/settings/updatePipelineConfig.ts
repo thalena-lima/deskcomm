@@ -12,6 +12,7 @@ import {
 } from "@/lib/schemas/settings";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { mergeConfiguracaoDeModulos } from "@/lib/pipelines/modulos";
 
 export type UpdatePipelineConfigResult =
   | { ok: true }
@@ -58,9 +59,20 @@ export async function updatePipelineConfig(
     : ((row.vocabulary as Record<string, unknown> | null) ?? {});
 
   const currentSettings = (row.settings as Record<string, unknown> | null) ?? {};
+  // O spread do topo é o que preserva `canonical_tags`, `identity_resolution` e
+  // qualquer chave que outro caminho tenha gravado: só se sobrescreve o que
+  // VEIO no patch.
   const nextSettings: Record<string, unknown> = { ...currentSettings };
   if (parsed.data.fields !== undefined) nextSettings.fields = parsed.data.fields;
   if (parsed.data.lost_reasons !== undefined) nextSettings.lost_reasons = parsed.data.lost_reasons;
+  // `modulos` NÃO segue o padrão das duas linhas acima. Atribuir
+  // `parsed.data.modulos` inteiro apagaria os módulos que o patch não citou —
+  // e o defeito ficaria invisível enquanto só houver um módulo. Ver
+  // `mergeConfiguracaoDeModulos`: spread por módulo E por propriedade do
+  // módulo, para o interruptor (`enabled`) e o mapa (`etapas`) não se apagarem.
+  if (parsed.data.modulos !== undefined) {
+    nextSettings.modulos = mergeConfiguracaoDeModulos(currentSettings.modulos, parsed.data.modulos);
+  }
 
   const { error } = await supabase
     .from("crm_pipelines")
@@ -79,6 +91,10 @@ export async function updatePipelineConfig(
       vocabulary_changed: !!parsed.data.vocabulary,
       fields_count: parsed.data.fields?.length ?? null,
       lost_reasons_count: parsed.data.lost_reasons?.length ?? null,
+      // Só a ESTRUTURA da mudança: quais módulos o patch tocou. O estado
+      // (ligado/desligado) fica no próprio funil; o log diz que alguém mexeu
+      // e em quê, não repete o dado.
+      modulos_changed: parsed.data.modulos ? Object.keys(parsed.data.modulos).sort() : null,
     },
   });
 

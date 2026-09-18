@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 
+import { ehPlaybookId } from "@/lib/afb/playbooks/catalogo";
 import { ehHexValido } from "@/lib/branding/rampa";
 import { IDIOMAS } from "@/lib/i18n/idiomas";
 import { MOEDAS_SERVIDAS } from "@/lib/money";
@@ -157,6 +158,102 @@ export const customFieldSchema = z.object({
 });
 export type CustomFieldDef = z.infer<typeof customFieldSchema>;
 
+/**
+ * Módulos ligados por FUNIL, não por organização — `crm_pipelines.settings.modulos`.
+ *
+ * Um módulo é um objeto com `enabled` e as chaves dele. A chave do módulo é
+ * genérica de propósito: o core sabe que existe um "copiloto comercial" ligável
+ * por funil e que ele atribui um PAPEL a cada coluna; QUEM preenche esse
+ * copiloto (playbook, textos, regras) mora fora daqui. Assim um fork atualiza o
+ * core sem carregar nome de cliente.
+ *
+ * `.strict()` nos níveis novos e não no topo: `enabled: "true"` (string) ou
+ * `enable: true` (erro de digitação) têm de falhar em validação, não entrar no
+ * jsonb e virar "desligado sem explicação" na leitura — que é `=== true` (ver
+ * `lib/pipelines/modulos.ts`). O topo segue frouxo para não quebrar cliente
+ * antigo que mande chave a mais.
+ *
+ * TUDO É PARCIAL, em três níveis: módulo ausente = não altera; propriedade
+ * ausente dentro do módulo = não altera. `{ copiloto_comercial: { enabled: false } }`
+ * NÃO apaga `etapas`. Quem garante isso é `mergeConfiguracaoDeModulos`, não o
+ * schema — o schema só diz o que pode entrar.
+ */
+
+/**
+ * O papel que uma coluna do funil desempenha para o copiloto comercial —
+ * vocabulário FECHADO, e do core: é o que o schema aceita e o que a leitura
+ * (`lib/afb/playbook/papeis.ts`) deriva. Um papel novo nasce aqui.
+ *
+ * DOIS conjuntos, e a diferença é de AUTORIDADE, não de gosto:
+ *
+ *   - CONFIGURÁVEIS: o administrador escolhe, coluna a coluna, no mapa.
+ *   - TERMINAIS: `ganho` e `perdido` vêm de `crm_stages.is_won` / `is_lost` e
+ *     SÓ de lá. Deixar escolhê-los no mapa permitiria uma configuração
+ *     transformar uma coluna aberta em "terminal" para o copiloto sem que o
+ *     CRM concorde — e o copiloto passaria a tratar como fechado um negócio
+ *     que o funil ainda tem em aberto. O schema de escrita recusa os dois; a
+ *     leitura descarta os dois se aparecerem num jsonb antigo ou mexido à mão.
+ */
+export const PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL = [
+  "prospeccao",
+  "conversa",
+  "pre_venda",
+  "reuniao_agendada",
+  "apresentacao",
+  "fechamento",
+  "pos_venda",
+] as const;
+export type PapelConfiguravelDaEtapaDoFunil =
+  (typeof PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL)[number];
+
+export const PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL = ["ganho", "perdido"] as const;
+export type PapelTerminalDaEtapaDoFunil = (typeof PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL)[number];
+
+/** O vocabulário inteiro — o que a RESOLUÇÃO de uma coluna pode devolver. */
+export const PAPEIS_DE_ETAPA_DO_FUNIL = [
+  ...PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL,
+  ...PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL,
+] as const;
+export type PapelDaEtapaDoFunil = (typeof PAPEIS_DE_ETAPA_DO_FUNIL)[number];
+
+/**
+ * `etapas` é `{ [id da etapa do funil]: papel configurável }`. Chave é o UUID
+ * de `crm_stages.id` — nunca nome, slug ou posição: os três mudam ou nascem do
+ * nome; o id nasce do banco. Quando enviado, o mapa SUBSTITUI o anterior
+ * inteiro (não há merge por stageId): é a única forma de DESMAPEAR uma coluna.
+ */
+/**
+ * `playbook_id` é QUAL roteiro comercial o copiloto usa neste funil — um id do
+ * catálogo (`lib/afb/playbooks/catalogo.ts`, identidade leve: este arquivo NÃO
+ * importa o registry nem o conteúdo), nunca o nome ou o slug do funil:
+ * dois funis podem usar o mesmo playbook, e um funil pode trocar o seu.
+ *
+ * Só ids REGISTRADOS entram (`ehPlaybookId`): um id solto gravado hoje vira
+ * "sem playbook" silencioso amanhã, e é melhor recusar na escrita do que
+ * descobrir na tela. `null` é "limpar a escolha"; ausente é "não mexa".
+ * Configuração sem `playbook_id` continua válida — é o estado legado, e a
+ * leitura o declara como "sem playbook configurado" em vez de inventar um.
+ */
+export const copilotoComercialSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    playbook_id: z
+      .string()
+      .refine(ehPlaybookId, { message: "Playbook desconhecido" })
+      .nullable()
+      .optional(),
+    etapas: z.record(z.uuid(), z.enum(PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL)).optional(),
+  })
+  .strict();
+export type CopilotoComercialPatch = z.infer<typeof copilotoComercialSchema>;
+
+export const modulosDeFunilSchema = z
+  .object({
+    copiloto_comercial: copilotoComercialSchema.optional(),
+  })
+  .strict();
+export type ModulosDeFunil = z.infer<typeof modulosDeFunilSchema>;
+
 export const pipelineConfigPatchSchema = z.object({
   vocabulary: z
     .object({
@@ -168,6 +265,7 @@ export const pipelineConfigPatchSchema = z.object({
     .optional(),
   fields: z.array(customFieldSchema).max(50).optional(),
   lost_reasons: z.array(z.string().min(1).max(80)).max(50).optional(),
+  modulos: modulosDeFunilSchema.optional(),
 });
 export type PipelineConfigPatch = z.infer<typeof pipelineConfigPatchSchema>;
 

@@ -15,11 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { updatePipelineConfig } from "@/app/actions/settings/updatePipelineConfig";
 import type { PipelineConfigPatch } from "@/lib/schemas/settings";
 import { camposDoFunil } from "@/lib/leads/campos-do-funil";
+import { moduloDeFunilAtivo, playbookIdDoCopiloto } from "@/lib/pipelines/modulos";
+import { ehPlaybookId, listarMetadadosDePlaybooks, type PlaybookId } from "@/lib/afb/playbooks/catalogo";
 import { customFieldSchema, type CustomFieldDef } from "@/lib/schemas/settings";
 import { Plus, Trash } from "@/lib/ui/icons";
+import { CopilotoMappingSection } from "./_copiloto";
 import { AgentMappingSection, ancoraDoMapeamento } from "./_mapping";
 import { StagesSection, ancoraDasEtapas } from "./_stages";
 
@@ -30,6 +34,13 @@ export interface PipelineRow {
   vocabulary: Record<string, string> | null;
   settings: Record<string, unknown> | null;
 }
+
+/**
+ * O valor do seletor para "nenhum playbook". O Radix Select não aceita `""`;
+ * ao salvar, vira `playbook_id: null` — que o merge grava e a leitura trata
+ * como "sem playbook configurado".
+ */
+export const SEM_PLAYBOOK = "__sem_playbook__";
 
 function readLostReasons(settings: Record<string, unknown> | null): string[] {
   if (!settings) return [];
@@ -92,6 +103,23 @@ function PipelineEditor({ pipeline }: { pipeline: PipelineRow }) {
   const [lost, setLost] = useState(v.lost ?? "Perdido");
   const [reasonsText, setReasonsText] = useState(readLostReasons(pipeline.settings).join(", "));
   const [fields, setFields] = useState<CustomFieldDef[]>(camposDoFunil(pipeline.settings));
+  // Pela chave do módulo, nunca pelo nome/slug do funil: é a configuração que
+  // liga, e o mesmo interruptor serve para qualquer funil desta organização.
+  const [copilotoComercial, setCopilotoComercial] = useState(
+    moduloDeFunilAtivo(pipeline.settings, "copiloto_comercial"),
+  );
+  // O playbook escolhido para este funil. Só a forma do id é lida aqui
+  // (`playbookIdDoCopiloto`); se o id gravado não estiver mais no registry, o
+  // seletor mostra "Selecione um playbook" — sem inventar um.
+  const idGravado = playbookIdDoCopiloto(pipeline.settings);
+  // Só um id que o registry conhece conta como "inicial": id órfão (playbook
+  // removido, jsonb mexido à mão) começa em «Selecione um playbook».
+  const playbookInicial: PlaybookId | null = ehPlaybookId(idGravado) ? idGravado : null;
+  // Tipado pela variável, e não por genérico no `useState`: o guarda de
+  // vocabulário lê `>…<` como texto de tela, e um `<` aqui fecharia um trecho
+  // que começa no genérico de `fields` e carrega o identificador `pipeline`.
+  const selecaoInicial: PlaybookId | typeof SEM_PLAYBOOK = playbookInicial ?? SEM_PLAYBOOK;
+  const [playbookId, setPlaybookId] = useState(selecaoInicial);
   const [isPending, startTransition] = useTransition();
 
   function handleSave() {
@@ -109,10 +137,19 @@ function PipelineEditor({ pipeline }: { pipeline: PipelineRow }) {
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
+    const playbookEscolhido: PlaybookId | null = playbookId === SEM_PLAYBOOK ? null : playbookId;
+    const patchDePlaybook: { playbook_id?: PlaybookId | null } =
+      playbookEscolhido === playbookInicial ? {} : { playbook_id: playbookEscolhido };
     const patch: PipelineConfigPatch = {
       vocabulary: { lead, deal, won, lost },
       fields: ok,
       lost_reasons: reasons,
+      // Só o que ESTA tela decide vai no patch: o interruptor sempre, e o
+      // playbook só quando o administrador o trocou — reenviar o id gravado a
+      // cada salvar faria "salvar enabled" também reescrever a escolha. O mapa
+      // de etapas e os outros módulos a action preserva — é
+      // `mergeConfiguracaoDeModulos` quem garante, não este objeto.
+      modulos: { copiloto_comercial: { enabled: copilotoComercial, ...patchDePlaybook } },
     };
     startTransition(async () => {
       const r = await updatePipelineConfig(pipeline.id, patch);
@@ -134,7 +171,7 @@ function PipelineEditor({ pipeline }: { pipeline: PipelineRow }) {
   ];
 
   return (
-    <div className="space-y-4 border-t border-border pt-6">
+    <div className="space-y-4 border-t border-border pt-6" data-testid={`funil-config-${pipeline.id}`}>
       <h3 className="text-sm font-semibold">{t("Vocabulário e campos")}</h3>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -252,6 +289,71 @@ function PipelineEditor({ pipeline }: { pipeline: PipelineRow }) {
           </Button>
         )}
       </div>
+
+      <div className="flex items-start gap-3 rounded-md border border-border p-3">
+        <Switch
+          id={`copiloto-comercial-${pipeline.id}`}
+          data-testid="copiloto-comercial-liga"
+          checked={copilotoComercial}
+          onCheckedChange={setCopilotoComercial}
+          disabled={isPending}
+        />
+        <div className="space-y-0.5">
+          <Label htmlFor={`copiloto-comercial-${pipeline.id}`} className="text-xs">
+            {t("Copiloto comercial")}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t("Exibe o copiloto comercial na caixa de entrada para leads deste funil.")}
+          </p>
+        </div>
+      </div>
+
+      {/* A seção do mapa só existe com o interruptor LIGADO — o mesmo padrão
+          das opções de um campo «select», que só aparecem quando o tipo é
+          select. Segue o estado local do interruptor, não o salvo: quem liga
+          quer ver na hora o que vai configurar. Ela salva sozinha e só o mapa;
+          o botão abaixo salva o resto (e o interruptor). */}
+      {copilotoComercial && (
+        <div className="space-y-1" data-testid={`copiloto-playbook-${pipeline.id}`}>
+          <Label className="text-xs" htmlFor={`copiloto-playbook-select-${pipeline.id}`}>
+            {t("Playbook do Copiloto")}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t("Qual roteiro comercial o copiloto usa neste funil. Sem escolha, o painel não aparece na caixa de entrada.")}
+          </p>
+          <Select
+            value={playbookId}
+            onValueChange={(v) => setPlaybookId(ehPlaybookId(v) ? v : SEM_PLAYBOOK)}
+            disabled={isPending}
+          >
+            <SelectTrigger
+              id={`copiloto-playbook-select-${pipeline.id}`}
+              aria-label={t("Playbook do Copiloto")}
+              data-testid="copiloto-playbook-seletor"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SEM_PLAYBOOK}>{t("Selecione um playbook")}</SelectItem>
+              {/* As opções vêm do CATÁLOGO (identidade leve), não do registry:
+                  esta tela não precisa das copies para montar um dropdown, e
+                  não deve pagar por elas. Playbook novo = entrada no catálogo,
+                  e ele aparece aqui sem tocar nesta tela. */}
+              {listarMetadadosDePlaybooks().map((pb) => (
+                <SelectItem key={pb.id} value={pb.id} data-testid={`copiloto-playbook-opcao-${pb.id}`}>
+                  {pb.nome} · {pb.versaoDoDocumento}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {copilotoComercial && (
+        <div className="border-t border-border pt-4">
+          <CopilotoMappingSection pipelineId={pipeline.id} settings={pipeline.settings} />
+        </div>
+      )}
 
       <div className="flex sm:justify-end">
         <Button onClick={handleSave} disabled={isPending} className="w-full sm:w-auto">
