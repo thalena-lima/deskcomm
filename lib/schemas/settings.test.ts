@@ -5,6 +5,9 @@ import {
   tenantSchema,
   notificationPrefsSchema,
   pipelineConfigPatchSchema,
+  PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL,
+  PAPEIS_DE_ETAPA_DO_FUNIL,
+  PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL,
 } from "./settings";
 
 describe("profileSchema", () => {
@@ -148,5 +151,148 @@ describe("pipelineConfigPatchSchema", () => {
       lost_reasons: ["Concorrente", "Preço"],
     });
     expect(r.success).toBe(true);
+  });
+
+  /**
+   * MÓDULOS POR FUNIL — o que o gate e o mapeamento do inbox vão ler.
+   *
+   * A leitura é `=== true` / vocabulário fechado sem validar forma, então a
+   * ÚNICA barreira contra `"true"` (string), `enable` (erro de digitação),
+   * papel inventado e chave vazia é este schema. Se ele afrouxar, a tela parece
+   * salvar e o inbox segue desligado ou lê um papel que não existe — a
+   * falha-em-verde que o produto self-host não pode ter.
+   */
+  describe("modulos", () => {
+    const A = "11111111-1111-4111-8111-000000000001";
+
+    it("aceita enabled true e false", () => {
+      for (const enabled of [true, false]) {
+        const r = pipelineConfigPatchSchema.safeParse({
+          modulos: { copiloto_comercial: { enabled } },
+        });
+        expect(r.success).toBe(true);
+        if (r.success) expect(r.data.modulos?.copiloto_comercial?.enabled).toBe(enabled);
+      }
+    });
+
+    it('rejeita enabled "true" como string', () => {
+      const r = pipelineConfigPatchSchema.safeParse({
+        modulos: { copiloto_comercial: { enabled: "true" } },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("rejeita `enable` no lugar de `enabled` (strict)", () => {
+      const r = pipelineConfigPatchSchema.safeParse({
+        modulos: { copiloto_comercial: { enable: true } },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("rejeita módulo desconhecido (strict no nível de modulos)", () => {
+      const r = pipelineConfigPatchSchema.safeParse({
+        modulos: { modulo_que_nao_existe: { enabled: true } },
+      });
+      expect(r.success).toBe(false);
+    });
+
+    it("rejeita modulos como array", () => {
+      const r = pipelineConfigPatchSchema.safeParse({ modulos: [] });
+      expect(r.success).toBe(false);
+    });
+
+    it("patch sem modulos continua válido e não inventa a chave", () => {
+      const r = pipelineConfigPatchSchema.safeParse({ lost_reasons: ["Preço"] });
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.data.modulos).toBeUndefined();
+    });
+
+    it("modulos vazio e módulo vazio são válidos (não alteram nada)", () => {
+      expect(pipelineConfigPatchSchema.safeParse({ modulos: {} }).success).toBe(true);
+      expect(pipelineConfigPatchSchema.safeParse({ modulos: { copiloto_comercial: {} } }).success).toBe(true);
+    });
+
+    describe("etapas", () => {
+      it("aceita o mapa stageId → papel, sozinho ou com enabled", () => {
+        const so = pipelineConfigPatchSchema.safeParse({
+          modulos: { copiloto_comercial: { etapas: { [A]: "conversa" } } },
+        });
+        expect(so.success).toBe(true);
+        if (so.success) {
+          expect(so.data.modulos?.copiloto_comercial?.etapas).toEqual({ [A]: "conversa" });
+          expect(so.data.modulos?.copiloto_comercial?.enabled).toBeUndefined();
+        }
+        const ambos = pipelineConfigPatchSchema.safeParse({
+          modulos: { copiloto_comercial: { enabled: true, etapas: { [A]: "fechamento" } } },
+        });
+        expect(ambos.success).toBe(true);
+      });
+
+      it("aceita os SETE papéis configuráveis", () => {
+        expect(PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL).toHaveLength(7);
+        for (const papel of PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL) {
+          const r = pipelineConfigPatchSchema.safeParse({
+            modulos: { copiloto_comercial: { etapas: { [A]: papel } } },
+          });
+          expect(r.success, papel).toBe(true);
+        }
+      });
+
+      it("REJEITA ganho e perdido no mapa: terminais vêm de is_won/is_lost, não de configuração", () => {
+        expect(PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL).toEqual(["ganho", "perdido"]);
+        for (const papel of PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL) {
+          const r = pipelineConfigPatchSchema.safeParse({
+            modulos: { copiloto_comercial: { etapas: { [A]: papel } } },
+          });
+          expect(r.success, papel).toBe(false);
+        }
+      });
+
+      it("o vocabulário inteiro é configuráveis + terminais, sem sobreposição", () => {
+        expect([...PAPEIS_DE_ETAPA_DO_FUNIL]).toEqual([
+          ...PAPEIS_CONFIGURAVEIS_DA_ETAPA_DO_FUNIL,
+          ...PAPEIS_TERMINAIS_DA_ETAPA_DO_FUNIL,
+        ]);
+        expect(new Set(PAPEIS_DE_ETAPA_DO_FUNIL).size).toBe(PAPEIS_DE_ETAPA_DO_FUNIL.length);
+      });
+
+      it("rejeita papel desconhecido, nome de coluna e maiúscula", () => {
+        for (const papel of ["papel_inventado", "Contato Feito", "Conversa", "", 1, null]) {
+          const r = pipelineConfigPatchSchema.safeParse({
+            modulos: { copiloto_comercial: { etapas: { [A]: papel } } },
+          });
+          expect(r.success, String(papel)).toBe(false);
+        }
+      });
+
+      it("rejeita stage id vazio ou que não é UUID", () => {
+        for (const chave of ["", " ", "sem-contato", "123"]) {
+          const r = pipelineConfigPatchSchema.safeParse({
+            modulos: { copiloto_comercial: { etapas: { [chave]: "conversa" } } },
+          });
+          expect(r.success, JSON.stringify(chave)).toBe(false);
+        }
+      });
+
+      it("rejeita etapas como array, string ou null", () => {
+        for (const etapas of [[], ["conversa"], "conversa", null]) {
+          const r = pipelineConfigPatchSchema.safeParse({
+            modulos: { copiloto_comercial: { etapas } },
+          });
+          expect(r.success).toBe(false);
+        }
+      });
+
+      it("etapas vazio é válido — desmapeia todas as colunas", () => {
+        expect(pipelineConfigPatchSchema.safeParse({ modulos: { copiloto_comercial: { etapas: {} } } }).success).toBe(true);
+      });
+
+      it("rejeita propriedade desconhecida no módulo (strict)", () => {
+        const r = pipelineConfigPatchSchema.safeParse({
+          modulos: { copiloto_comercial: { enabled: true, etapa: {} } },
+        });
+        expect(r.success).toBe(false);
+      });
+    });
   });
 });

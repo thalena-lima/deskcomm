@@ -85,6 +85,11 @@ const TELAS = ["/app/inbox", "/app/kanban", "/app/contacts", "/app/metrics", "/a
  */
 const DADO_DO_TENANT = new Set([
   "Entregue", // crm_stages.name, do seed de e2e
+  // crm_stages.name, do seed de e2e (o funil «Pedidos» do gatilho de
+  // organização nova). Coincidiu com a chave de interface no dia em que o
+  // mapeamento do copiloto ganhou o papel «Pós-venda»: /app/metrics mostra o
+  // nome da coluna como o tenant o cadastrou, e é assim que deve ser.
+  "Pós-venda",
 ]);
 
 const CHAVES_QUE_MUDAM = new Set(
