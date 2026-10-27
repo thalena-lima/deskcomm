@@ -3242,6 +3242,28 @@ ensure_encryption_key() {
     || c_ylw "$(t "⚠ não consegui semear a chave de cifra do CPF no banco — o contato será salvo sem CPF até rodar update.sh de novo.")"
 }
 
+# ── EDIÇÃO HOSTINGER: VERSÕES VÊM SEMPRE DO ORIGINAL ────────────────────────
+#
+# thalena-lima/deskcomm é vitrine: traz o código do original, mas não publica
+# release nem tag. Quem clonou dali faria `ultima_release_estavel` perguntar a
+# um repositório sem release, e o update.sh pararia em "Não encontrei nenhuma
+# versão publicada". Antes do `git fetch --tags`, o update.sh e o agent.sh
+# chamam esta função, que troca o `origin` para o original — daí em diante a
+# instalação é igual a quem clonou de melgarafael/DeskcommCRM. Só age nesse
+# endereço exato; qualquer outro origin fica como está.
+apontar_origem_para_o_original() {
+  local origem
+  origem="$(git config --get remote.origin.url 2>/dev/null || true)"
+  origem="$(printf '%s' "$origem" | tr '[:upper:]' '[:lower:]' | sed -E 's#/+$##; s#\.git$##')"
+  case "$origem" in
+    https://github.com/thalena-lima/deskcomm|http://github.com/thalena-lima/deskcomm|git@github.com:thalena-lima/deskcomm)
+      git remote set-url origin https://github.com/melgarafael/DeskcommCRM.git 2>/dev/null \
+        && printf '%s\n' "✓ atualizações passam a vir do repositório oficial (melgarafael/DeskcommCRM)" >&2
+      ;;
+  esac
+  return 0
+}
+
 # ── A ÚLTIMA RELEASE ESTÁVEL PUBLICADA ──────────────────────────────────────
 #
 # ⚠️ TAG EXISTIR NÃO É RELEASE PUBLICADA, e confundir as duas instala código

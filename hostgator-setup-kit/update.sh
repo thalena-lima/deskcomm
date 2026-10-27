@@ -117,6 +117,7 @@ subir_para_ler_o_par() {
 
 # ── 1. Tem atualização mesmo? ────────────────────────────────────────────────
 step "Procurando atualizações"
+apontar_origem_para_o_original   # edição Hostinger: ver _common.sh
 git fetch --tags --quiet origin 2>/dev/null || c_ylw "⚠ não consegui falar com o GitHub — sigo com o código que já está aqui."
 # A AUTORIDADE é a release publicada, NUNCA a maior tag — ver
 # `ultima_release_estavel` em _common.sh. Um `TARGET_TAG` passado à mão

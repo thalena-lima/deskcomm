@@ -157,6 +157,7 @@ esc() {
 
 # ── 1. Que versão está instalada e qual é a última publicada? ────────────────
 FETCH_OK=1
+apontar_origem_para_o_original   # edição Hostinger: ver _common.sh
 git fetch --tags --quiet origin 2>/dev/null || FETCH_OK=0
 
 CURRENT_TAG="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
