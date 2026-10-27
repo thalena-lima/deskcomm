@@ -14,9 +14,10 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/melgarafael/DeskcommCRM.git}"
-# Link de parceria com a HostGator. Mesma URL e mesmo rótulo do README: uma
-# promessa só, num lugar só — duas redações da mesma oferta viram duas ofertas.
-VPS_URL="https://www.hostgator.com.br/52708-141-3-52.html"
+# Link da Hostinger (edição Thalena Lima). Mesma URL e mesmo rótulo
+# do README: uma promessa só, num lugar só — duas redações da mesma oferta viram
+# duas ofertas.
+VPS_URL="https://www.hostg.xyz/aff_c?offer_id=6&aff_id=221622&url_id=5038&source=deskcomm"
 COMUNIDADE_URL="https://lp-comunidade.automatiklabs.com.br"
 
 # ── Aparência ───────────────────────────────────────────────────────────────
@@ -122,21 +123,23 @@ mostrar_requisitos() {
 
   O CRM roda 24 horas por dia, com o WhatsApp junto. Para isso ele precisa de:
 
-    • Plano VPS Turing (ou superior) — 2 vCPU e 4 GB de RAM
-      O plano Cartesius (1 vCPU / 2 GB) NÃO dá conta: o WhatsApp usa cerca de
-      150 MB por número conectado, e a stack inteira não cabe.
-    • 80 GB de disco
-    • Ubuntu 22.04 LTS ou 24.04 LTS
-    • Datacenter em São Paulo — é o que segura a latência do WhatsApp no Brasil
+    • VPS Hostinger KVM 2 (ou superior) — 2 vCPU e 8 GB de RAM
+      O mínimo para operar é 2 vCPU e 4 GB: o WhatsApp usa cerca de 150 MB por
+      número conectado, e a stack inteira tem 7 serviços. O KVM 1 opera no limite.
+    • Ubuntu 22.04 LTS ou 24.04 LTS, sem aplicativo pré-instalado
+    • Localização Brasil (São Paulo) — é o que segura a latência do WhatsApp
 
   Onde contratar:
 
        ${VPS_URL}
 
+  Guia passo a passo da Hostinger:
+
+       https://github.com/thalena-lima/deskcomm/blob/main/docs/deploy-hostinger/README.md
+
 REQ
-  c_dim "  Esse é um link de parceria: assinar por ele sai com desconto e ajuda a"
-  c_dim "  manter o projeto. O CRM é MIT e roda em qualquer servidor — se você já"
-  c_dim "  tem um, ou prefere outro provedor, funciona igual."
+  c_dim "  O CRM é MIT e roda em qualquer servidor — se você já tem um, ou prefere"
+  c_dim "  outro provedor, funciona igual."
   printf '\n'
 }
 
@@ -199,11 +202,13 @@ MENU
     2)
       cat <<SSH
 
-  Entre no servidor pelo terminal. O provedor te mandou o IP e a senha de root
-  por e-mail quando a VPS ficou pronta. A HostGator escuta o SSH na porta 22022,
-  e não na 22 padrão, por isso o \`-p 22022\`:
+  Entre no servidor pelo terminal, com o IP que aparece no painel da VPS e a
+  senha de root que você criou. A Hostinger usa a porta 22, a padrão do SSH:
 
-       ssh -p 22022 root@SEU_IP_AQUI
+       ssh root@SEU_IP_AQUI
+
+  (Em outro provedor, use a porta que ele informou: ssh -p PORTA root@SEU_IP.
+  Sem terminal no computador? O painel da Hostinger tem um terminal no navegador.)
 
 SSH
       comando_de_instalacao

@@ -40,7 +40,10 @@ tem_ufw() { grep -qE 'ufw allow ' "$1"; }
 
 # ── comecar.sh: o script de ENTRADA do kit (curl | bash) ────────────────────
 check "o comecar.sh tem ao menos um comando ssh (senão o resto passaria vazio)" tem_ssh "$COMECAR"
-check "todo ssh do comecar.sh leva -p 22022" test -z "$(ssh_sem_porta "$COMECAR")"
+# Edição Hostinger: o comecar.sh deste fork vende a VPS da Hostinger, cujo SSH
+# escuta na 22 padrão — mandar `-p 22022` ali é que daria porta fechada.
+ssh_com_22022() { grep -nE '(^|[[:space:]`])ssh[[:space:]]+.*-p[[:space:]]*22022' "$1"; }
+check "nenhum ssh do comecar.sh manda para a 22022 (a Hostinger escuta na 22)" test -z "$(ssh_com_22022 "$COMECAR")"
 # O texto do `ssh` mora num heredoc SEM aspas no delimitador: ali uma crase vira
 # substituição de comando, e quem roda o `curl | bash` vê "-p: command not found"
 # no lugar da frase. Executa o bloco como o bash executaria e exige stderr vazio.
@@ -58,7 +61,7 @@ check "todo scp do runbook leva -P 22022 (maiúsculo: no scp, -p é outra coisa)
 check "nenhum ufw allow do runbook deixa a porta de ssh sem a 22022" test -z "$(ufw_ssh_sem_22022 "$RUNBOOK")"
 
 if [ "$FAILS" -gt 0 ]; then
-  ssh_sem_porta "$COMECAR" | sed 's/^/    comecar.sh ssh sem porta: /'
+  ssh_com_22022 "$COMECAR" | sed 's/^/    comecar.sh ssh na 22022: /'
   mensagem_ssh_stderr "$COMECAR" | sed 's/^/    comecar.sh mensagem de ssh: /'
   ssh_sem_porta "$RUNBOOK" | sed 's/^/    runbook ssh sem porta: /'
   scp_sem_porta "$RUNBOOK" | sed 's/^/    runbook scp sem porta: /'

@@ -25,26 +25,28 @@
 
 ---
 
-> ### ☁️ Corre este CRM en producción con 1 comando
+> ### ☁️ Edición Hostinger — corre este CRM en producción con 1 comando
 >
-> DeskcommCRM se desarrolla en **alianza con HostGator**: el [`hostgator-setup-kit/`](hostgator-setup-kit/)
-> instala el CRM completo (app + WhatsApp + base de datos) en un VPS con un único comando, y el
-> [runbook de producción](docs/runbooks/waha-hostgator.md) ya asume ese entorno.
+> Esta es la edición de **Thalena Lima** de [DeskcommCRM](https://github.com/melgarafael/DeskcommCRM),
+> con el paso a paso para instalar en un **VPS de Hostinger**. El código, el instalador y las
+> actualizaciones son los del proyecto original — instalas directo desde allí y recibes cada
+> versión nueva con el botón "Actualizar ahora", sin depender de esta página.
 >
-> **[👉 Contratar el VPS de HostGator con el descuento de la alianza](https://www.hostgator.com.br/52708-141-3-52.html)** —
-> datacenter en São Paulo, ideal para WhatsApp funcionando 24/7. *(enlace de partner — contratar por él apoya el proyecto y te sale más barato)*
+> **[👉 Contratar el VPS de Hostinger con mi enlace](https://www.hostg.xyz/aff_c?offer_id=6&aff_id=221622&url_id=5038&source=deskcomm)** —
+> plan **KVM 2** (2 vCPU / 8 GB), con datacenter en Brasil.
+>
+> 📘 **[Guía completa (en portugués): DeskcommCRM en Hostinger, paso a paso](docs/deploy-hostinger/README.md)**
 >
 > **¿Todavía no tienes servidor?** Ejecuta esto **en tu propia computadora** (macOS, Linux o WSL).
-> Te dice qué plan contratar — con los números reales del runbook, no un "depende" — y te
-> devuelve el comando exacto para tu caso:
+> Te dice qué plan contratar y te devuelve el comando exacto para tu caso:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/melgarafael/DeskcommCRM/main/hostgator-setup-kit/comecar.sh | bash
+> curl -fsSL https://raw.githubusercontent.com/thalena-lima/deskcomm/main/hostgator-setup-kit/comecar.sh | bash
 > ```
 >
 > *(¿prefieres leer antes de ejecutar? clona el repo y corre `bash hostgator-setup-kit/comecar.sh` —
-> no instala nada sin que confirmes.)*
-
+> no instala nada sin que confirmes. La carpeta se llama `hostgator-setup-kit` en el proyecto
+> original, pero el instalador es el mismo para cualquier VPS, Hostinger incluido.)*
 ---
 
 ## ⚡ Instalar en tu VPS (el camino principal)
@@ -85,7 +87,7 @@ lista. Si falta Docker, el instalador pregunta y lo instala solo.
 
 | Ítem | Dónde conseguirlo |
 |---|---|
-| **VPS con Docker** | [HostGator](https://www.hostgator.com.br/52708-141-3-52.html) (alianza) — o cualquier VPS con Docker. 4 GB de RAM recomendados |
+| **VPS con Docker** | [Hostinger](https://www.hostg.xyz/aff_c?offer_id=6&aff_id=221622&url_id=5038&source=deskcomm) (KVM 2, [guía](docs/deploy-hostinger/README.md)) — o cualquier VPS con Docker. 4 GB de RAM como mínimo |
 | **Dominio** | Un registro **A** apuntando a la IP del VPS (ej.: `crm.tuempresa.com`) |
 | **Base de datos** | Cuenta gratis en [supabase.com](https://supabase.com) — 3 claves + la cadena de conexión del **Session pooler** |
 | **IA** | Una clave de **OpenRouter**, **Anthropic** u **OpenAI** — el instalador pregunta cuál quieres |
