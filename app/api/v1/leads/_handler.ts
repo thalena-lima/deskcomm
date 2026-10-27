@@ -52,6 +52,7 @@ import {
 import { motivosDaCategoria } from "@/lib/leads/motivos-de-perda-do-funil";
 import type { CreateLeadInput, UpdateLeadInput } from "@/lib/schemas";
 import { ehCorrecaoDeMovimentoDaIa } from "@/lib/leads/correcao-humana";
+import { ocultarProvaMetaNaResposta, removerProvaMetaLeadSubmitted } from "@/lib/leads/prova-meta-lead-submitted";
 import { ehRecusaDaVisibilidadeDoFunil } from "@/lib/leads/recusa-da-visibilidade";
 
 type SB = SupabaseClient;
@@ -448,7 +449,7 @@ export async function listLeadsHandler(
     hasMore && last
       ? encLeadCursor({ created_at: String(last.created_at), id: String(last.id) })
       : null;
-  return { leads: page, cursor, has_more: hasMore };
+  return { leads: page.map(ocultarProvaMetaNaResposta), cursor, has_more: hasMore };
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +500,7 @@ export async function getLeadHandler(
       traduzir("Lead não encontrado.", ctx.idioma ?? "pt-BR"),
     );
   }
-  return data as Record<string, unknown>;
+  return ocultarProvaMetaNaResposta(data as Record<string, unknown>);
 }
 
 // ---------------------------------------------------------------------------
@@ -754,7 +755,7 @@ export async function createLeadHandler(
       expected_close_date: input.expected_close_date ?? null,
       tags: input.tags ?? [],
       source: input.source,
-      source_metadata: input.source_metadata ?? {},
+      source_metadata: removerProvaMetaLeadSubmitted(input.source_metadata),
       external_id: input.external_id ?? null,
       webhook_source_id: input.webhook_source_id ?? null,
       custom_fields: input.custom_fields ?? {},
@@ -868,7 +869,7 @@ export async function createLeadHandler(
     },
   });
 
-  return lead as Record<string, unknown>;
+  return ocultarProvaMetaNaResposta(lead as Record<string, unknown>);
 }
 
 // ---------------------------------------------------------------------------
@@ -1204,7 +1205,7 @@ export async function updateLeadHandler(
     },
   });
 
-  return (fresh ?? updated) as Record<string, unknown>;
+  return ocultarProvaMetaNaResposta((fresh ?? updated) as Record<string, unknown>);
 }
 
 // ---------------------------------------------------------------------------
@@ -1615,7 +1616,7 @@ export async function moveLeadHandler(
     },
   });
 
-  return finalLead;
+  return ocultarProvaMetaNaResposta(finalLead);
 }
 
 
@@ -1713,7 +1714,7 @@ export async function retomarLeadHandler(
   if (jaErr) {
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, jaErr.message);
   }
-  if (jaRetomado) return jaRetomado as Record<string, unknown>;
+  if (jaRetomado) return ocultarProvaMetaNaResposta(jaRetomado as Record<string, unknown>);
 
   const { data: funil, error: funilErr } = await supabase
     .from("crm_pipelines")

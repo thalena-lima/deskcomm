@@ -541,6 +541,49 @@ export function UpdatePanel() {
     );
   }
 
+  // O RETRATO É VELHO DEMAIS PARA FALAR PELA INSTALAÇÃO (#3488).
+  //
+  // `agent_online` acima só abre às 24h — até lá, um retrato de horas atrás
+  // respondia com convicção total. Foi o que aconteceu em produção: o DNS da
+  // VPS caiu, o agente ficou 51 batidas sem postar, a v1.90.0 saiu no meio e a
+  // tela anunciava "É a mais recente. Não há nada a fazer." com o retrato das
+  // 11h45 (medido às 16h).
+  //
+  // A frase de baixo só é honesta DEPOIS de perguntar se a comparação foi feita
+  // há pouco: `latest_version` vazio num retrato velho não significa "não há
+  // nada publicado", significa "ninguém olhou há horas". É o mesmo princípio do
+  // ramo de `compare_failed`, com o silêncio no lugar da falha declarada.
+  //
+  // `!data.update_available` no gate de propósito: quando o retrato velho
+  // APONTA uma versão nova, a informação antiga ainda basta para agir — esconder
+  // o botão ali tiraria a saída justamente de quem está atrasado. O que ele não
+  // sustenta é a afirmação de que não há nada a fazer.
+  if (data.agent_stale && !data.update_available) {
+    return (
+      <Layout semSmtp={semSmtp} titulo={t("Não sei se há versão nova")}>
+        <p className="text-sm">
+          {t("O servidor não fala comigo desde")}{" "}
+          <strong>{horaCurta(data.agent_last_seen_at)}</strong>
+          {t(
+            ". É ele quem confere se saiu versão nova — então não posso afirmar que esta é a mais recente.",
+          )}
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          <strong>{t("Não quer dizer que esteja desatualizado, nem que esteja em dia")}</strong>
+          : {t("quer dizer que eu não sei.")}
+        </p>
+        <p className="mt-3 text-sm">
+          {t(
+            "Assim que ele voltar a falar comigo, esta tela se atualiza sozinha. Se demorar, verifique a conexão do servidor com a internet ou peça ajuda a quem cuida dele.",
+          )}
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {t("Versão instalada:")} {versao}.
+        </p>
+      </Layout>
+    );
+  }
+
   if (!data.update_available && !data.off_release) {
     return (
       <Layout semSmtp={semSmtp} titulo={`${t("Você está na versão")} ${versao}`}>

@@ -35,6 +35,9 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createClient } from "@supabase/supabase-js";
+
+import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
 
 import { test, expect, type Page, type APIRequestContext } from "./helpers/test";
 
@@ -485,6 +488,73 @@ test("quando a atualização falha, a tela nomeia a versão certa, mostra o log 
   ).toHaveCount(0);
   await expect(page.getByRole("button", { name: /atualizar agora/i })).toBeVisible();
   await page.screenshot({ path: "evidence/final-5-falha-superada.png" });
+});
+
+test("retrato antigo informa a última conferência sem antecipar o comando manual", async ({ page, request }, testInfo) => {
+  test.setTimeout(90_000);
+  // Só a idade é preparada no banco de teste: login, heartbeat, leitura da API
+  // e a tela continuam reais. Nenhum relógio do produto ou resposta é alterado.
+  const c = credenciaisSupabaseDeTeste();
+  expect(["127.0.0.1", "localhost"]).toContain(new URL(c.url).hostname);
+  const db = createClient(c.url, c.serviceRole, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const envelhecer = async (minutos: number): Promise<string> => {
+    const ultimaConferencia = new Date(Date.now() - minutos * 60_000).toISOString();
+    const { data, error } = await db.from("system_version")
+      .update({ agent_last_seen_at: ultimaConferencia })
+      .eq("id", 1).select("agent_last_seen_at").single();
+    expect(error).toBeNull();
+    expect(Date.parse(data!.agent_last_seen_at)).toBe(Date.parse(ultimaConferencia));
+    return ultimaConferencia;
+  };
+
+  resetEstado();
+  try {
+    await heartbeat(request, { current_version: "1.0.0", latest_version: "" });
+    await loginWithTotp(page, creds.users.dono!.email, creds.dono_totp!.secret);
+    await page.goto("/app/settings/atualizacao");
+    await expect(page.getByText("É a mais recente. Não há nada a fazer.")).toBeVisible();
+    await expect(page.getByText("bash hostgator-setup-kit/update.sh")).toHaveCount(0);
+
+    const ultimaConferencia = await envelhecer(31);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Não sei se há versão nova" })).toBeVisible();
+    await expect(page.getByText("É a mais recente. Não há nada a fazer.")).toHaveCount(0);
+    await expect(page.getByText(/verifique a conexão do servidor com a internet/)).toBeVisible();
+    await expect(page.getByText("bash hostgator-setup-kit/update.sh")).toHaveCount(0);
+    const hora = await page.evaluate((iso) => {
+      const d = new Date(iso);
+      return `${String(d.getHours()).padStart(2, "0")}h${String(d.getMinutes()).padStart(2, "0")}`;
+    }, ultimaConferencia);
+    await expect(page.getByText(hora, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Versão instalada:.*1\.0\.0/)).toBeVisible();
+    const pastaDaEvidencia = path.join("evidence", "retrato-host-3504");
+    fs.mkdirSync(pastaDaEvidencia, { recursive: true });
+    await testInfo.attach("retrato-antigo", {
+      body: await page.screenshot({ path: path.join(pastaDaEvidencia, "retrato-antigo.png") }),
+      contentType: "image/png",
+    });
+
+    await heartbeat(request, { current_version: "1.0.0", latest_version: "1.1.0" });
+    await envelhecer(31);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Atualizar agora", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Não sei se há versão nova" })).toHaveCount(0);
+    await expect(page.getByText("bash hostgator-setup-kit/update.sh")).toHaveCount(0);
+
+    await envelhecer(25 * 60);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Atualização automática indisponível" })).toBeVisible();
+    await expect(page.getByText("bash hostgator-setup-kit/update.sh")).toBeVisible();
+    await testInfo.attach("agente-offline", {
+      body: await page.screenshot({ path: path.join(pastaDaEvidencia, "agente-offline.png") }),
+      contentType: "image/png",
+    });
+  } finally {
+    // Não deixar a idade preparada para as outras jornadas desta instalação.
+    await heartbeat(request, { current_version: "1.0.0", latest_version: "" });
+  }
 });
 
 test("quando o host não conseguiu comparar, a tela não diz que está em dia", async ({

@@ -13,6 +13,7 @@ import { semSmtpNaInstalacao } from "@/lib/email/estado";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractChangelogRange } from "@/lib/system/changelog";
+import { retratoDoHostVelho } from "@/lib/system/retrato";
 import {
   isRunStale,
   rodadaDoBancoDaLinha,
@@ -220,6 +221,21 @@ export async function GET(_req: NextRequest): Promise<Response> {
     // não tocada por nenhum heartbeat, coluna com o default da migration).
     has_known_release: version?.has_known_release ?? true,
     agent_online: !Number.isNaN(lastSeen) && now.getTime() - lastSeen < AGENT_OFFLINE_AFTER_MS,
+    // A IDADE DO RETRATO (#3488). `agent_online` sozinho não alcança: com 24h
+    // de paciência, o retrato fica quatro horas velho e a tela continua
+    // afirmando "é a mais recente" com convicção total. Este campo é a mesma
+    // informação com a régua da FRESCURA (`RETRATO_VELHO_APOS_MS`), que é a
+    // pergunta que a frase final faz de verdade: "conferi isso agora?".
+    //
+    // Vem separado de `agent_online` de propósito — os dois respondem coisas
+    // diferentes (24h = "posso atualizar sozinho?"; 30 min = "posso afirmar que
+    // está em dia?"), e juntá-los faria a tela ensinar o caminho manual a quem
+    // só precisava esperar a próxima batida.
+    agent_stale: retratoDoHostVelho(version?.agent_last_seen_at, now),
+    // Desde quando o retrato é o que é — a tela diz "sem notícias desde 14h45"
+    // em vez de um "não sei" sem idade, que não ajuda ninguém a decidir se
+    // espera mais cinco minutos ou chama quem cuida do servidor.
+    agent_last_seen_at: version?.agent_last_seen_at ?? null,
     // A janela em que a atualização TERMINOU e o host ainda não contou. É o que
     // deixa a tela dizer que o pedido terminou, em vez de cair no texto
     // genérico de quem nunca atualizou nada — e ela se fecha sozinha na batida

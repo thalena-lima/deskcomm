@@ -32,3 +32,14 @@ export function exigirBancoLocal(valor: string | undefined): string {
   }
   return valor;
 }
+
+/** URL de bancada, sem credenciais, parâmetros ou caminhos que desviem o destino. */
+export function exigirHttpLocal(valor: string): string {
+  let url: URL;
+  try { url = new URL(valor); } catch { throw new Error("URL local inválida"); }
+  if (url.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+      || url.username || url.password || url.search || url.hash || url.pathname !== "/") {
+    throw new Error("recusado: somente origem HTTP localhost da bancada");
+  }
+  return url.origin;
+}

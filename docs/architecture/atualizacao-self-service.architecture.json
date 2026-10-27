@@ -65,7 +65,7 @@
       "col": 2,
       "type": "api",
       "label": "GET /api/v1/system/version",
-      "sublabel": "só is_platform_admin vê o operacional · entrega a faixa instalada→alvo"
+      "sublabel": "só is_platform_admin vê o operacional · faixa instalada→alvo e idade do retrato"
     },
     {
       "id": "updateroute",
@@ -105,7 +105,7 @@
       "col": 3,
       "type": "frontend",
       "label": "/app/settings/atualizacao",
-      "sublabel": "4 estados · avisos de TODAS as versões da faixa, antes do botão"
+      "sublabel": "retrato antigo informa a última conferência · avisos antes do botão"
     }
   ],
   "edges": [
@@ -207,7 +207,8 @@
         "recusa antes de tocar em qualquer coisa sai com código 3 (REFUSED_RC), distinto de falha no meio (1): o agent.sh não faz rollback nem reescreve o .env de um run que não mexeu em nada",
         "APP_IMAGE/APP_PULL_POLICY são GRAVADOS no .env (na atualização e no rollback): export morre com o processo e o compose lê do .env — sem isso o próximo `up -d` do dono desfaz a atualização",
         "o run em 'dispatched' é a ÚNICA fonte de 'há pedido?' — não existe flag paralelo em system_version",
-        "num rollback, a versão exibida vem do run (from_version), não do git describe do host — esse aponta para a versão que quebrou"
+        "num rollback, a versão exibida vem do run (from_version), não do git describe do host — esse aponta para a versão que quebrou",
+        "mais de 30min sem heartbeat torna o retrato antigo: a tela informa a última conferência e orienta verificar a conexão, sem antecipar o comando manual do agente offline (24h); uma release já anunciada continua disponível"
       ]
     },
     {

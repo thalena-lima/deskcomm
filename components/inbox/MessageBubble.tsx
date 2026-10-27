@@ -192,6 +192,8 @@ export function MessageBubble({
   // Só não se encaminha o que foi apagado: o conteúdo saiu do ar de propósito.
   const podeEncaminhar = Boolean(onEncaminhar) && !apagada;
   const temMenu = Boolean(onResponder || podeEncaminhar || (podeEditar && onEditar) || podeApagar || podeOcultar);
+  const cartaoDeDocumentoVisivel = hasMedia && message.type === "document"
+    && !editando && !apagada && !ocultaNoCrm;
   const reenvio = onReenviar
     ? reenvioDaMensagem(message, { userId: viewerUserId, podeReenviarDeOutros, agora })
     : "nenhum";
@@ -312,6 +314,9 @@ export function MessageBubble({
             : cn(
                 "rounded-2xl px-3 py-2 shadow-sm",
                 temMenu && "pr-8",
+                // A área de toque da seta ocupa 48px. O documento precisa
+                // terminar antes dela, inclusive quando o cartão encolhe.
+                temMenu && cartaoDeDocumentoVisivel && "pointer-coarse:pr-12 pointer-coarse:max-w-[85%]",
                 isOutbound
                   ? "rounded-br-sm bg-primary text-primary-foreground"
                   : "rounded-bl-sm bg-muted text-foreground",

@@ -5426,6 +5426,13 @@ grant execute on function public.fn_can_view_conversation(uuid, uuid)
 -- linha-por-linha que vivia aqui era reinstalada a cada update.sh e valia até
 -- aquele bloco, e era ela que fazia a caixa de entrada custar ~7 ms por linha
 -- (#3090): quem derruba o clone antigo é o `drop` colado no bloco final.
+-- A policy `conversations_select` saiu daqui: a 0035 a criava só com
+-- `fn_can_view_conversation` e o ramo de PARTICIPANTE da 0661 a redefine adiante.
+-- Deixar as duas reabria uma janela — em todo install/update a versão
+-- intermediária (sem o `or exists`) valia até a final chegar, e o convidado não
+-- via a conversa nesse intervalo. O `drop policy if exists` do bloco da 0661
+-- continua, e é ele que limpa o clone que recebeu a versão antiga. Vigiado por
+-- `tests/unit/baseline-nao-constroi-o-que-derruba.test.ts`.
 
 drop policy if exists "conversations_agent_write" on public.conversations;
 drop policy if exists "conversations_agent_insert" on public.conversations;
@@ -54434,6 +54441,55 @@ $$;
 revoke execute on function public.fn_vocabulario_de_tags_operar(uuid, text, text, text, text) from public, anon;
 grant  execute on function public.fn_vocabulario_de_tags_operar(uuid, text, text, text, text) to authenticated, service_role;
 
+-- ---- participantes do atendimento conjunto (migration 0661, issue #2542) ----
+-- Tabela introduzida pela 0661. A policy final vive na forward-fix 9016,
+-- depois do escopo em lote da 0726; cadeia e baseline terminam na mesma regra.
+-- Nasce ANTES da VARREDURA anon por vizinhança, embora não crie função.
+--
+-- A tabela, a RLS de leitura (organização + papel + a PRÓPRIA linha) e — a
+-- linha que faz o convidado VER — o ramo de participante no `conversations_select`
+-- (o `fn_can_view_conversation` continua a régua; aqui só se ACRESCENTA a porta).
+-- `messages` herda o escopo por `exists` na própria policy. O DONO único
+-- (`assigned_to_user_id`) não é tocado por nada disto: entrar não é assumir.
+create table if not exists public.conversation_participants (
+  id               uuid primary key default gen_random_uuid(),
+  organization_id  uuid not null references public.organizations(id) on delete cascade,
+  conversation_id  uuid not null references public.conversations(id) on delete cascade,
+  user_id          uuid not null references auth.users(id) on delete cascade,
+  invited_by       uuid references auth.users(id) on delete set null,
+  joined_at        timestamptz not null default now(),
+  left_at          timestamptz,
+  constraint conversation_participants_unico unique (conversation_id, user_id)
+);
+
+alter table public.conversation_participants add column if not exists invited_by uuid;
+alter table public.conversation_participants add column if not exists joined_at timestamptz not null default now();
+alter table public.conversation_participants add column if not exists left_at timestamptz;
+
+create index if not exists participantes_por_usuario
+  on public.conversation_participants (organization_id, user_id)
+  where left_at is null;
+create index if not exists participantes_por_conversa
+  on public.conversation_participants (organization_id, conversation_id);
+
+alter table public.conversation_participants enable row level security;
+
+revoke all    on public.conversation_participants from anon, authenticated;
+grant  select on public.conversation_participants to authenticated;
+grant  all    on public.conversation_participants to service_role;
+
+drop policy if exists tenant_isolation_conversation_participants_select on public.conversation_participants;
+create policy tenant_isolation_conversation_participants_select
+  on public.conversation_participants
+  for select to authenticated
+  using (
+    organization_id in (select public.fn_user_org_ids())
+    and public.fn_role_at_least(organization_id, 'agent')
+    and user_id = auth.uid()
+  );
+
+do $f$ begin perform public.fn_aplicar_travas_de_suporte(); end $f$;
+
 -- manifest: **O entregue e o lido da API oficial chegam ao destinatário da campanha (issue #2937).** `fn_campanha_sincroniza_ack` saía cedo quando `new.status is not distinct from old.status` e o gatilho escutava só `after update of status`: na API oficial o webhook de entrega/leitura mantém `messages.status = 'sent'` e grava apenas `delivered_at`/`read_at` (`lib/channels/meta/status-update.ts:23-31`), então o gatilho nem disparava ou saía no primeiro `if` — `campaign_recipients.delivered_at`/`read_at` ficavam nulos para sempre e as taxas de entrega/leitura da campanha, zeradas. A função passa a derivar o "status efetivo" dos carimbos quando o canal não muda o `status`, e o gatilho passa a escutar exatamente as três colunas que aquele ack toca (`status`, `delivered_at`, `read_at`). O caminho do canal não oficial (o `status` chega `delivered`/`read`, `lib/waha/ingest.ts`), a regra de "status analítico nunca retrocede" e o caminho de `failed` seguem idênticos. Gate: `tests/invariants/ack-da-api-oficial-alcanca-o-destinatario.test.ts` (vermelho na main, verde aqui).
 
 -- ---- o ack da API oficial alcança o destinatário da campanha (migration 0678, issue #2937) ----
@@ -58232,8 +58288,507 @@ begin
  if changed then new.google_next_attempt_at:=now(); end if;
  return new;
 end;$$;
+-- ---- nascimento CTWA causal e LeadSubmitted (migration 0803) ----
+alter table public.ad_conversion_dispatches
+  add column if not exists claim_token uuid,
+  add column if not exists claimed_until timestamptz;
+
+comment on column public.messages.metadata is
+  'meta_ctwa_message_v1 e reservado ao ingest service_role: clique real do referral da mensagem inbound. Authenticated pode editar os demais metadados.';
+comment on column public.crm_leads.source_metadata is
+  'meta_capi_lead_birth_v1 e prova causal reservada, escrita somente pela RPC fn_nascer_lead_da_mensagem. Nao e first-touch.';
+
+create or replace function public.fn_guard_meta_ctwa_message_v1()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if new.metadata ? 'meta_ctwa_message_v1' and
+     (new.direction <> 'inbound' or new.conversation_id is null or new.contact_id is null) then
+    raise exception 'meta_ctwa_message_v1_requires_inbound';
+  end if;
+  if current_user not in ('service_role', 'postgres') and
+     (case when tg_op = 'INSERT' then new.metadata ? 'meta_ctwa_message_v1'
+           else (new.metadata->'meta_ctwa_message_v1') is distinct from
+                (old.metadata->'meta_ctwa_message_v1')
+                or ((new.metadata ? 'meta_ctwa_message_v1' or old.metadata ? 'meta_ctwa_message_v1')
+                    and (new.organization_id,new.contact_id,new.conversation_id,new.direction)
+                        is distinct from
+                        (old.organization_id,old.contact_id,old.conversation_id,old.direction)) end) then
+    raise exception 'meta_ctwa_message_v1_reserved';
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.fn_guard_meta_ctwa_message_v1() from public, anon, authenticated;
+grant execute on function public.fn_guard_meta_ctwa_message_v1() to service_role;
+drop trigger if exists trg_guard_meta_ctwa_message_v1 on public.messages;
+create trigger trg_guard_meta_ctwa_message_v1 before insert or update of metadata, direction, organization_id, contact_id, conversation_id
+  on public.messages for each row execute function public.fn_guard_meta_ctwa_message_v1();
+
+create or replace function public.fn_guard_meta_capi_lead_birth_v1()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if (case when tg_op = 'INSERT' then new.source_metadata ? 'meta_capi_lead_birth_v1'
+           else (new.source_metadata->'meta_capi_lead_birth_v1') is distinct from
+                (old.source_metadata->'meta_capi_lead_birth_v1')
+                or ((new.source_metadata ? 'meta_capi_lead_birth_v1' or old.source_metadata ? 'meta_capi_lead_birth_v1')
+                    and (new.organization_id,new.contact_id,new.created_at) is distinct from
+                        (old.organization_id,old.contact_id,old.created_at)) end) then
+    if current_user <> pg_get_userbyid((select proowner from pg_catalog.pg_proc
+         where oid = 'public.fn_nascer_lead_da_mensagem(uuid,uuid,uuid,uuid,text,text,jsonb,text[],uuid,uuid)'::regprocedure))
+       or current_setting('deskcomm.meta_capi_birth_lead_id', true) is distinct from new.id::text then
+      raise exception 'meta_capi_lead_birth_v1_reserved';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.fn_guard_meta_capi_lead_birth_v1() from public, anon, authenticated;
+grant execute on function public.fn_guard_meta_capi_lead_birth_v1() to service_role;
+drop trigger if exists trg_guard_meta_capi_lead_birth_v1 on public.crm_leads;
+create trigger trg_guard_meta_capi_lead_birth_v1 before insert or update of source_metadata, organization_id, contact_id, created_at
+  on public.crm_leads for each row execute function public.fn_guard_meta_capi_lead_birth_v1();
+
+create or replace function public.fn_nascer_lead_da_mensagem(
+  p_org uuid, p_contact uuid, p_pipeline uuid, p_stage uuid, p_title text,
+  p_source text, p_source_metadata jsonb, p_tags text[],
+  p_message uuid, p_conversation uuid
+) returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  v_msg public.messages%rowtype;
+  v_lead uuid;
+  v_click text;
+  v_channel text;
+begin
+  select * into v_msg from public.messages
+    where id = p_message and organization_id = p_org
+      and contact_id = p_contact and conversation_id = p_conversation
+      and direction = 'inbound';
+  if not found then
+    raise exception 'causal_message_mismatch';
+  end if;
+  select c.channel into v_channel from public.conversations c
+    where c.id = p_conversation and c.organization_id = p_org
+      and c.contact_id = p_contact;
+  if not found then raise exception 'causal_conversation_mismatch'; end if;
+  if not exists (
+    select 1 from public.crm_stages s
+    where s.id=p_stage and s.organization_id=p_org and s.pipeline_id=p_pipeline
+  ) then raise exception 'causal_stage_mismatch'; end if;
+
+  -- A funcao oficial preserva advisory lock, moeda, funil, etapa, tags e NULL
+  -- para demanda ja aberta. Nunca recebe prova fornecida pelo chamador.
+  v_lead := public.fn_nascer_lead_da_conversa(
+    p_org, p_contact, p_pipeline, p_stage, p_title, p_source,
+    coalesce(p_source_metadata, '{}'::jsonb) - 'meta_capi_lead_birth_v1', p_tags);
+  if v_lead is null then return null; end if;
+
+  v_click := v_msg.metadata->'meta_ctwa_message_v1'->>'ctwa_clid';
+  if v_channel = 'whatsapp'
+     and v_msg.metadata->'meta_ctwa_message_v1'->>'platform' = 'meta_ads'
+     and v_msg.metadata->'meta_ctwa_message_v1'->>'source_type' = 'ad'
+     and nullif(btrim(v_click), '') is not null
+     and length(v_click) <= 512
+     and p_source is distinct from 'campanha'
+     and not exists (
+       select 1 from public.campaign_recipients cr
+       where cr.organization_id = p_org and cr.conversation_id = p_conversation
+     ) then
+    -- O gatilho exige simultaneamente o owner da RPC e este ID temporário.
+    -- Mesmo service_role/postgres fora deste nascimento não pode forjar a prova.
+    perform set_config('deskcomm.meta_capi_birth_lead_id', v_lead::text, true);
+    update public.crm_leads set source_metadata =
+      coalesce(source_metadata, '{}'::jsonb) ||
+      jsonb_build_object('meta_capi_lead_birth_v1',
+        jsonb_build_object('platform','meta_ads','source_type','ad',
+          'ctwa_clid',v_click,'message_id',p_message,
+          'conversation_id',p_conversation,'captured_at',v_msg.created_at))
+      where organization_id = p_org and id = v_lead;
+    perform set_config('deskcomm.meta_capi_birth_lead_id', '', true);
+  end if;
+
+  perform public.emit_event('lead.created','crm_lead',v_lead,
+    jsonb_build_object('pipeline_id',p_pipeline,'stage_id',p_stage,
+      'conversation_id',p_conversation),
+    jsonb_build_object('source','nascimento-da-conversa'),p_org);
+  return v_lead;
+end;
+$$;
+revoke execute on function public.fn_nascer_lead_da_mensagem(uuid,uuid,uuid,uuid,text,text,jsonb,text[],uuid,uuid) from public, anon, authenticated;
+grant execute on function public.fn_nascer_lead_da_mensagem(uuid,uuid,uuid,uuid,text,text,jsonb,text[],uuid,uuid) to service_role;
+
+create or replace function public.fn_claim_meta_lead_submitted(p_org uuid, p_lead uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_row public.ad_conversion_dispatches%rowtype;
+  v_token uuid := gen_random_uuid();
+begin
+  if not exists (
+    select 1 from public.crm_leads l where l.organization_id=p_org and l.id=p_lead
+      and l.source_metadata->'meta_capi_lead_birth_v1'->>'platform'='meta_ads'
+      and l.source_metadata->'meta_capi_lead_birth_v1'->>'source_type'='ad'
+      and nullif(l.source_metadata->'meta_capi_lead_birth_v1'->>'ctwa_clid','') is not null
+  ) then return jsonb_build_object('acquired',false,'status','no_proof'); end if;
+  insert into public.ad_conversion_dispatches
+    (organization_id,lead_id,platform,event_name,status,event_id,
+     event_occurred_at,meta_event_name,claim_token,claimed_until)
+    select p_org,p_lead,'meta_ads','LeadSubmitted','processing',
+      p_lead::text||':LeadSubmitted',l.created_at,'LeadSubmitted',
+      v_token,now()+interval '2 minutes'
+    from public.crm_leads l where l.organization_id=p_org and l.id=p_lead
+  on conflict (organization_id,lead_id,event_name) do nothing;
+  select * into v_row from public.ad_conversion_dispatches
+    where organization_id=p_org and lead_id=p_lead and event_name='LeadSubmitted'
+    for update;
+  if not found then return jsonb_build_object('acquired',false,'status','missing'); end if;
+  if v_row.platform <> 'meta_ads'
+     or v_row.event_id is distinct from p_lead::text||':LeadSubmitted'
+     or v_row.meta_event_name is distinct from 'LeadSubmitted'
+     or v_row.event_occurred_at is distinct from (
+       select l.created_at from public.crm_leads l
+       where l.organization_id=p_org and l.id=p_lead
+     ) then
+    return jsonb_build_object('acquired',false,'status','invalid_ledger');
+  end if;
+  if v_row.status='sent' then return jsonb_build_object('acquired',false,'status','sent'); end if;
+  if v_row.claim_token is not null and v_row.claimed_until > now()
+     and v_row.claim_token <> v_token then
+    return jsonb_build_object('acquired',false,'status','busy');
+  end if;
+  update public.ad_conversion_dispatches set status='processing',
+    claim_token=v_token,claimed_until=now()+interval '2 minutes',
+    event_id=p_lead::text||':LeadSubmitted',attempted_at=now()
+    where id=v_row.id and organization_id=p_org;
+  return jsonb_build_object('acquired',true,'status','processing','token',v_token);
+end;
+$$;
+revoke execute on function public.fn_claim_meta_lead_submitted(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.fn_claim_meta_lead_submitted(uuid,uuid) to service_role;
+
+create or replace function public.fn_settle_meta_lead_submitted(
+  p_org uuid,p_lead uuid,p_token uuid,p_status text,p_reason text,p_detail text
+) returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  if p_status not in ('sent','skipped','error') then return false; end if;
+  update public.ad_conversion_dispatches set status=p_status,reason=p_reason,
+    detail=left(p_detail,400),claim_token=null,claimed_until=null,attempted_at=now()
+  where organization_id=p_org and lead_id=p_lead and event_name='LeadSubmitted'
+    and platform='meta_ads' and event_id=p_lead::text||':LeadSubmitted'
+    and claim_token=p_token and claimed_until>now() and status='processing';
+  return found;
+end;
+$$;
+revoke execute on function public.fn_settle_meta_lead_submitted(uuid,uuid,uuid,text,text,text) from public, anon, authenticated;
+grant execute on function public.fn_settle_meta_lead_submitted(uuid,uuid,uuid,text,text,text) to service_role;
+
+-- Reenvio explicito usa o mesmo ledger e nao migra os consumidores antigos.
+create or replace function public.fn_solicitar_reenvio_conversao(p_org uuid, p_lead uuid, p_event text)
+returns boolean language plpgsql set search_path = public as $$
+declare v_linha public.ad_conversion_dispatches%rowtype;
+begin
+  if p_event is null or not (
+    p_event in ('Purchase', 'QualifiedLead', 'LeadSubmitted')
+    or p_event ~ '^Etapa:[0-9a-f-]{36}$'
+    or p_event ~ '^MetaEtapa:[0-9a-f-]{36}$'
+  ) then
+    return false;
+  end if;
+  select * into v_linha from public.ad_conversion_dispatches
+    where organization_id = p_org and lead_id = p_lead and event_name = p_event for update;
+  if not found or v_linha.status = 'sent' then return false; end if;
+  if p_event = 'LeadSubmitted' then
+    if v_linha.platform <> 'meta_ads' or v_linha.event_occurred_at is null
+       or v_linha.event_id is distinct from p_lead::text || ':LeadSubmitted'
+       or v_linha.meta_event_name is distinct from 'LeadSubmitted'
+       or (v_linha.claim_token is not null and v_linha.claimed_until > now())
+       then return false; end if;
+  elsif p_event ~ '^MetaEtapa:' then
+    if v_linha.event_occurred_at is null or v_linha.meta_event_name is null then return false; end if;
+  elsif p_event <> 'Purchase' and (v_linha.event_occurred_at is null or v_linha.google_action_id is null) then
+    return false;
+  end if;
+  if p_event = 'Purchase' and v_linha.remote_request_id is null and not exists (
+    select 1 from public.crm_leads where id = p_lead and organization_id = p_org and status = 'won'
+  ) then return false; end if;
+  if exists (select 1 from public.event_log where organization_id = p_org and entity_id = p_lead
+    and event_type = 'ad_conversion.retry_requested' and status in ('pending', 'processing')
+    and coalesce(payload->>'event_name', 'Purchase') = p_event) then return false; end if;
+  perform public.emit_event('ad_conversion.retry_requested', 'crm_lead', p_lead,
+    jsonb_build_object('event_name', p_event), '{}'::jsonb, p_org);
+  update public.ad_conversion_dispatches set reason = 'reprocessamento_solicitado', attempted_at = now()
+    where id = v_linha.id and organization_id = p_org;
+  return true;
+end;
+$$;
+revoke execute on function public.fn_solicitar_reenvio_conversao(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.fn_solicitar_reenvio_conversao(uuid, uuid, text) to service_role;
+
 notify pgrst,'reload schema';
 
+-- 0804: null desliga LeadSubmitted causal em toda organizacao.
+-- Coluna propria evita que um escritor antigo de settings restaure o estado.
+alter table public.organizations
+  add column if not exists meta_lead_birth_enabled_at timestamptz;
+comment on column public.organizations.meta_lead_birth_enabled_at is
+  'Null desliga LeadSubmitted causal. Cada ativacao troca o corte pelo horario do banco; reativar nao envia cliques antigos.';
+
+create or replace function public.fn_definir_meta_lead_birth(p_org uuid, p_enabled boolean)
+returns timestamptz language plpgsql set search_path = '' as $$
+declare
+  v_ativada_em timestamptz;
+begin
+  if p_org is null or p_enabled is null then
+    raise exception 'meta_lead_birth_invalid_input' using errcode = '22023';
+  end if;
+  update public.organizations
+     set meta_lead_birth_enabled_at = case when p_enabled then clock_timestamp() else null end
+   where id = p_org
+   returning meta_lead_birth_enabled_at into v_ativada_em;
+  if not found then
+    raise exception 'meta_lead_birth_org_not_found' using errcode = '22023';
+  end if;
+  return v_ativada_em;
+end;
+$$;
+revoke execute on function public.fn_definir_meta_lead_birth(uuid, boolean) from public, anon, authenticated;
+grant execute on function public.fn_definir_meta_lead_birth(uuid, boolean) to service_role;
+notify pgrst,'reload schema';
+
+-- ---- LeadSubmitted por clique CTWA (migration 0805) ----
+-- manifest: Registra cada clique CTWA inbound em livro proprio, atomico com a mensagem, para LeadSubmitted por clique sem mudar o ledger de Purchase e etapas.
+-- O ID da primeira mensagem sobrevive a exclusao da conversa; a exclusao LGPD
+-- do contato ou da organizacao remove a linha por cascata.
+create table if not exists public.meta_ctwa_click_dispatches (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  first_message_id uuid not null,
+  ctwa_clid text not null check (length(ctwa_clid) between 1 and 512),
+  captured_at timestamptz not null,
+  activation_at_capture timestamptz,
+  status text not null default 'pending'
+    check (status in ('pending','processing','sent','skipped','error')),
+  reason text,
+  detail text,
+  event_id text not null,
+  claim_token uuid,
+  claimed_until timestamptz,
+  attempted_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (organization_id, ctwa_clid),
+  unique (organization_id, first_message_id),
+  unique (organization_id, event_id)
+);
+create index if not exists meta_ctwa_click_dispatches_org_status_idx
+  on public.meta_ctwa_click_dispatches (organization_id, status, captured_at desc);
+create index if not exists meta_ctwa_click_dispatches_org_contact_time_idx
+  on public.meta_ctwa_click_dispatches (organization_id, contact_id, captured_at desc);
+alter table public.meta_ctwa_click_dispatches enable row level security;
+revoke all on public.meta_ctwa_click_dispatches from public, anon, authenticated;
+grant select, insert, update, delete on public.meta_ctwa_click_dispatches to service_role;
+comment on table public.meta_ctwa_click_dispatches is
+  'Evidencia e livro-razao de LeadSubmitted por clique CTWA. Server-only; primeiro toque do contato e demais conversoes nao sao alterados.';
+comment on column public.meta_ctwa_click_dispatches.first_message_id is
+  'ID historico da primeira mensagem, sem FK para preservar a prova ate a exclusao LGPD do contato.';
+
+create or replace function public.fn_guard_meta_ctwa_click_identity() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if (new.organization_id,new.contact_id,new.first_message_id,new.ctwa_clid,
+      new.captured_at,new.activation_at_capture,new.event_id) is distinct from
+     (old.organization_id,old.contact_id,old.first_message_id,old.ctwa_clid,
+      old.captured_at,old.activation_at_capture,old.event_id) then
+    raise exception 'meta_ctwa_click_identity_immutable';
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.fn_guard_meta_ctwa_click_identity() from public, anon, authenticated;
+grant execute on function public.fn_guard_meta_ctwa_click_identity() to service_role;
+drop trigger if exists trg_guard_meta_ctwa_click_identity on public.meta_ctwa_click_dispatches;
+create trigger trg_guard_meta_ctwa_click_identity before update
+  on public.meta_ctwa_click_dispatches for each row
+  execute function public.fn_guard_meta_ctwa_click_identity();
+
+-- O ledger anterior identifica o evento pelo lead, mas sua prova preserva o
+-- ctwa_clid. Um clique ja enviado antes desta tabela nao pode ganhar outro ID.
+create or replace function public.fn_meta_ctwa_click_enviado_legado(p_org uuid,p_clid text)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.ad_conversion_dispatches d
+    join public.crm_leads l on l.id=d.lead_id and l.organization_id=d.organization_id
+    where d.organization_id=p_org and d.platform='meta_ads'
+      and d.event_name='LeadSubmitted' and d.status='sent'
+      and l.source_metadata->'meta_capi_lead_birth_v1'->>'platform'='meta_ads'
+      and l.source_metadata->'meta_capi_lead_birth_v1'->>'source_type'='ad'
+      and l.source_metadata->'meta_capi_lead_birth_v1'->>'ctwa_clid'=p_clid
+  );
+$$;
+revoke execute on function public.fn_meta_ctwa_click_enviado_legado(uuid,text)
+  from public, anon, authenticated;
+grant execute on function public.fn_meta_ctwa_click_enviado_legado(uuid,text) to service_role;
+
+create or replace function public.fn_record_meta_ctwa_click() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_clid text;
+  v_activation timestamptz;
+  v_at timestamptz;
+  v_sent_legacy boolean;
+  v_id uuid := gen_random_uuid();
+begin
+  if new.direction <> 'inbound'
+     or new.metadata->'meta_ctwa_message_v1'->>'platform' is distinct from 'meta_ads'
+     or new.metadata->'meta_ctwa_message_v1'->>'source_type' is distinct from 'ad' then
+    return new;
+  end if;
+  v_clid := new.metadata->'meta_ctwa_message_v1'->>'ctwa_clid';
+  if v_clid is null or v_clid <> btrim(v_clid) or length(v_clid) not between 1 and 512 then
+    return new;
+  end if;
+  if not exists (select 1 from public.contacts c
+      where c.id=new.contact_id and c.organization_id=new.organization_id)
+     or not exists (select 1 from public.conversations c
+      where c.id=new.conversation_id and c.organization_id=new.organization_id
+        and c.contact_id=new.contact_id and c.channel='whatsapp') then
+    -- A ancora valida exige escopo valido. Falhar reverte mensagem e evento
+    -- juntos; aceitar a mensagem aqui perderia o clique silenciosamente.
+    raise exception 'meta_ctwa_click_scope_mismatch';
+  end if;
+  -- O lock ordena captura e toggle da organizacao, ambos no relogio do banco.
+  select o.meta_lead_birth_enabled_at into v_activation
+    from public.organizations o where o.id=new.organization_id for share;
+  v_at := clock_timestamp();
+  v_sent_legacy := public.fn_meta_ctwa_click_enviado_legado(new.organization_id,v_clid);
+  insert into public.meta_ctwa_click_dispatches
+    (id,organization_id,contact_id,first_message_id,ctwa_clid,captured_at,
+     activation_at_capture,status,reason,event_id)
+  values (v_id,new.organization_id,new.contact_id,new.id,v_clid,v_at,
+    v_activation,
+    case when v_sent_legacy or v_activation is null or v_at<=v_activation
+      then 'skipped' else 'pending' end,
+    case when v_sent_legacy then 'lead_submitted_legado_enviado'
+      when v_activation is null or v_at<=v_activation then 'lead_submitted_desativado'
+      else null end,
+    v_id::text||':LeadSubmitted')
+  on conflict (organization_id,ctwa_clid) do nothing;
+  return new;
+end;
+$$;
+revoke execute on function public.fn_record_meta_ctwa_click() from public, anon, authenticated;
+grant execute on function public.fn_record_meta_ctwa_click() to service_role;
+drop trigger if exists trg_record_meta_ctwa_click on public.messages;
+create trigger trg_record_meta_ctwa_click after insert on public.messages
+  for each row execute function public.fn_record_meta_ctwa_click();
+
+create or replace function public.fn_claim_meta_ctwa_click(p_org uuid,p_click uuid)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_row public.meta_ctwa_click_dispatches%rowtype;
+  v_token uuid := gen_random_uuid();
+begin
+  select * into v_row from public.meta_ctwa_click_dispatches
+    where organization_id=p_org and id=p_click for update;
+  if not found then return jsonb_build_object('acquired',false,'status','missing'); end if;
+  if v_row.status='sent' then return jsonb_build_object('acquired',false,'status','sent'); end if;
+  if public.fn_meta_ctwa_click_enviado_legado(p_org,v_row.ctwa_clid) then
+    update public.meta_ctwa_click_dispatches
+      set status='skipped',reason='lead_submitted_legado_enviado',
+          claim_token=null,claimed_until=null
+      where organization_id=p_org and id=p_click;
+    return jsonb_build_object('acquired',false,'status','legacy_sent');
+  end if;
+  if v_row.activation_at_capture is null or v_row.captured_at<=v_row.activation_at_capture then
+    return jsonb_build_object('acquired',false,'status','disabled_at_capture');
+  end if;
+  if v_row.event_id is distinct from v_row.id::text||':LeadSubmitted' then
+    return jsonb_build_object('acquired',false,'status','invalid_ledger');
+  end if;
+  if v_row.claim_token is not null and v_row.claimed_until>now() then
+    return jsonb_build_object('acquired',false,'status','busy');
+  end if;
+  update public.meta_ctwa_click_dispatches
+    set status='processing',claim_token=v_token,claimed_until=now()+interval '2 minutes',
+        attempted_at=now(),reason=null
+    where organization_id=p_org and id=p_click;
+  return jsonb_build_object('acquired',true,'status','processing','token',v_token);
+end;
+$$;
+revoke execute on function public.fn_claim_meta_ctwa_click(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.fn_claim_meta_ctwa_click(uuid,uuid) to service_role;
+
+create or replace function public.fn_settle_meta_ctwa_click(
+  p_org uuid,p_click uuid,p_token uuid,p_status text,p_reason text,p_detail text
+) returns boolean language plpgsql security definer set search_path = '' as $$
+begin
+  if p_status not in ('sent','skipped','error') then return false; end if;
+  update public.meta_ctwa_click_dispatches
+    set status=p_status,reason=p_reason,detail=left(p_detail,400),
+        claim_token=null,claimed_until=null,attempted_at=now()
+  where organization_id=p_org and id=p_click and claim_token=p_token
+    and claimed_until>now() and status='processing';
+  return found;
+end;
+$$;
+revoke execute on function public.fn_settle_meta_ctwa_click(uuid,uuid,uuid,text,text,text)
+  from public, anon, authenticated;
+grant execute on function public.fn_settle_meta_ctwa_click(uuid,uuid,uuid,text,text,text)
+  to service_role;
+
+create or replace function public.fn_solicitar_reenvio_meta_ctwa_click(p_org uuid,p_click uuid)
+returns boolean language plpgsql security definer set search_path = '' as $$
+declare
+  v_row public.meta_ctwa_click_dispatches%rowtype;
+  v_enabled timestamptz;
+begin
+  select * into v_row from public.meta_ctwa_click_dispatches
+    where organization_id=p_org and id=p_click for update;
+  if not found or v_row.status='sent'
+     or (v_row.claim_token is not null and v_row.claimed_until>now()) then
+    return false;
+  end if;
+  if public.fn_meta_ctwa_click_enviado_legado(p_org,v_row.ctwa_clid) then
+    return false;
+  end if;
+  select meta_lead_birth_enabled_at into v_enabled
+    from public.organizations where id=p_org;
+  if v_row.activation_at_capture is null or v_enabled is distinct from v_row.activation_at_capture
+     or v_row.captured_at<=v_enabled then return false; end if;
+  perform public.emit_event('ad_conversion.click_retry_requested','meta_ctwa_click',p_click,
+    jsonb_build_object('click_id',p_click),'{}'::jsonb,p_org);
+  update public.meta_ctwa_click_dispatches
+    set reason='reprocessamento_solicitado',attempted_at=now()
+    where organization_id=p_org and id=p_click;
+  return true;
+end;
+$$;
+revoke execute on function public.fn_solicitar_reenvio_meta_ctwa_click(uuid,uuid)
+  from public, anon, authenticated;
+grant execute on function public.fn_solicitar_reenvio_meta_ctwa_click(uuid,uuid) to service_role;
+notify pgrst,'reload schema';
+
+
+-- ---- o clique em anúncio some na anonimização (migration 0806, doc 199) ----
+-- manifest: **O registro de clique em anúncio (`meta_ctwa_click_dispatches`) some quando o contato é anonimizado (#3128, doc 199 pergunta 2 = A).** A tabela guarda o `ctwa_clid`, que liga a pessoa ao anúncio em que ela clicou na Meta — dado pessoal. A anonimização não exclui o contato, então o `on delete cascade` da tabela nunca dispara num pedido do titular. O gatilho `trg_contacts_anonimizado_apaga_cliques_ctwa` APAGA as linhas do contato na virada de `is_anonymized` (o mesmo desenho de `fn_apaga_propostas_de_contato_anonimizado`): a porta por onde os dois caminhos de anonimização passam. Custo aceito no doc 199: se a Meta reenviar um clique antigo dessa pessoa, ele é contado de novo. Idempotente; espelhado no apêndice do `baseline.sql` logo depois do bloco da 0805. Gates: `tests/invariants/meta-lead-por-clique.test.ts` e a decisão em `tests/invariants/lgpd-redact-unificado-alcanca-pelo-catalogo.test.ts`.
+create or replace function public.fn_apaga_cliques_ctwa_de_contato_anonimizado()
+  returns trigger
+  language plpgsql
+  security definer
+  set search_path to ''
+as $$
+begin
+  delete from public.meta_ctwa_click_dispatches
+   where organization_id = new.organization_id and contact_id = new.id;
+  return new;
+end$$;
+
+revoke execute on function public.fn_apaga_cliques_ctwa_de_contato_anonimizado() from public, anon, authenticated;
+
+drop trigger if exists trg_contacts_anonimizado_apaga_cliques_ctwa on public.contacts;
+create trigger trg_contacts_anonimizado_apaga_cliques_ctwa
+  after update of is_anonymized on public.contacts
+  for each row
+  when (new.is_anonymized = true and coalesce(old.is_anonymized, false) = false)
+  execute function public.fn_apaga_cliques_ctwa_de_contato_anonimizado();
 
 -- ---- o escopo da conversa avaliado uma vez por consulta (migration 0726) ----
 -- manifest: O escopo de leitura da conversa passa a ser avaliado UMA VEZ por consulta (`fn_conversation_scope()`) em vez de uma vez por linha (`fn_can_view_conversation`): a caixa de entrada deixa de custar ~7 ms por linha no RLS (#3090)
@@ -58377,25 +58932,6 @@ $$;
 revoke all on function public.fn_conversation_scope() from public, anon;
 grant execute on function public.fn_conversation_scope() to authenticated, service_role;
 
--- A policy: o mesmo resultado da 0035, sem uma chamada por linha.
-drop policy if exists "conversations_select" on public.conversations;
-create policy "conversations_select" on public.conversations
-  for select using (
-    (select public.fn_is_platform_admin())
-    or organization_id in (
-         select s.organization_id from public.fn_conversation_scope() s where s.org_wide_read
-       )
-    or (
-         assigned_to_user_id = auth.uid()
-         and organization_id in (select s.organization_id from public.fn_conversation_scope() s)
-       )
-    or (
-         assigned_to_user_id is null
-         and organization_id in (
-              select s.organization_id from public.fn_conversation_scope() s where s.sees_unassigned
-            )
-       )
-  );
 
 -- 0734 — avaliação única de permissões (#3087)
 -- manifest: Avalia papel e contexto de suporte uma vez por verificação RBAC (#3087), preservando regras, grants e limites.
@@ -60114,6 +60650,148 @@ $$;
 
 revoke execute on function public.fn_enfileirar_midia_vencida(integer) from public, anon, authenticated;
 grant execute on function public.fn_enfileirar_midia_vencida(integer) to service_role;
+-- ---- 0563: contato pessoal — a coluna e a saída de campanha (spec 21, fatia 1) ----
+-- Espelho idempotente da migration 0563. É este apêndice que chega a todo
+-- self-host: o install.sh aplica o baseline num banco novo e o update.sh o
+-- re-aplica num banco existente; nenhum dos dois roda as migrations.
+-- `is_personal` nasce desligado: contato novo é operacional até alguém marcar.
+-- O status `personal` é saída própria de campanha — nunca `opted_out`, para
+-- não inflar "pediu para parar".
+alter table public.contacts
+  add column if not exists is_personal boolean default false not null;
+
+comment on column public.contacts.is_personal is
+  'Contato de vida pessoal (spec 21): escondido da operação e inutilizado para envio. Só gerente/dono marca e desmarca, pela rota personal; quem/quando fica em auditoria + timeline, nunca aqui.';
+
+create index if not exists idx_contacts_org_personal
+  on public.contacts (organization_id)
+  where (is_personal = true);
+
+alter table public.campaign_recipients
+  drop constraint if exists campaign_recipients_status_check;
+
+alter table public.campaign_recipients
+  add constraint campaign_recipients_status_check check (status in (
+    'pending','queued','sending','sent','delivered','read','replied',
+    'failed','skipped','cancelled','opted_out','personal'
+  ));
+
+notify pgrst, 'reload schema';
+
+-- manifest: Preserva atendimento conjunto depois do escopo em lote da 0726, limita convite a leitura/resposta sem conceder controle e entrega entrada/saída pelo Realtime (#2542, integração #2848).
+-- ---- atendimento conjunto: controle e atualização da tela (migration 9016) ----
+-- A 0661 precede a 0726 na cadeia. Esta forward-fix reinstala a policy atual
+-- COM participação depois dela, sem editar nenhuma migration já publicada.
+do $conversations_select$ begin
+  -- O ramo de PARTICIPANTE (conversa atendida em conjunto) fica, e a forma da
+  -- main também: escopo resolvido em conjunto por fn_conversation_scope(), ANTES
+  -- do scan. A forma antiga do PR (fn_can_view_conversation por linha) fazia o
+  -- planner voltar a chamar a função por candidata — reprovado por
+  -- tests/invariants/escopo-da-conversa-avaliado-uma-vez.test.ts (#2848 sobre o
+  -- conserto #3090). A política abaixo é a da main (58213) + o ramo participante.
+  drop policy if exists "conversations_select" on public.conversations;
+  create policy "conversations_select" on public.conversations
+    for select using (
+      (select public.fn_is_platform_admin())
+      or organization_id in (
+           select s.organization_id from public.fn_conversation_scope() s where s.org_wide_read
+         )
+      or (
+           assigned_to_user_id = auth.uid()
+           and organization_id in (select s.organization_id from public.fn_conversation_scope() s)
+         )
+      or (
+           assigned_to_user_id is null
+           and organization_id in (
+                select s.organization_id from public.fn_conversation_scope() s where s.sees_unassigned
+              )
+         )
+      or exists (
+           select 1
+             from public.conversation_participants cp
+            where cp.conversation_id = conversations.id
+              and cp.organization_id = conversations.organization_id
+              and cp.user_id = auth.uid()
+              and cp.left_at is null
+              and not exists (
+                select 1 from public.contacts pc
+                 where pc.id=conversations.contact_id
+                   and pc.organization_id=conversations.organization_id
+                   and pc.is_personal
+              )
+         )
+    );
+end $conversations_select$;
+
+-- O convite não amplia UPDATE/DELETE. Mantém o escopo anterior de quem já
+-- escrevia: owner, gestor e o modo de visibilidade configurado no banco.
+-- WITH CHECK true preserva a mudança de responsável que já era permitida;
+-- o USING mede a linha ANTES da escrita, não a identidade que o corpo propõe.
+drop policy if exists conversation_participant_read_is_not_control_update on public.conversations;
+create policy conversation_participant_read_is_not_control_update
+  on public.conversations as restrictive for update to authenticated
+  using (public.fn_can_view_conversation(organization_id, assigned_to_user_id))
+  with check (true);
+drop policy if exists conversation_participant_read_is_not_control_delete on public.conversations;
+create policy conversation_participant_read_is_not_control_delete
+  on public.conversations as restrictive for delete to authenticated
+  using (public.fn_can_view_conversation(organization_id, assigned_to_user_id));
+
+
+-- Responder não dá edição/exclusão do histórico de outra pessoa. Quem já
+-- tinha escopo mantém a escrita anterior; a convidada pode editar/revogar sua
+-- própria saída, como exige messages/[id], sem poder apagar linhas do histórico.
+drop policy if exists message_participant_reply_is_not_history_update on public.messages;
+create policy message_participant_reply_is_not_history_update
+  on public.messages as restrictive for update to authenticated
+  using (
+    (sent_by_user_id=auth.uid() and direction='outbound' and sent_via in ('user','crm'))
+    or exists (select 1 from public.conversations c
+      where c.id=messages.conversation_id and c.organization_id=messages.organization_id
+        and public.fn_can_view_conversation(c.organization_id,c.assigned_to_user_id))
+  ) with check (
+    exists (select 1 from public.conversations c
+      where c.id=messages.conversation_id and c.organization_id=messages.organization_id
+        and (public.fn_can_view_conversation(c.organization_id,c.assigned_to_user_id)
+          or (messages.sent_by_user_id=auth.uid() and messages.direction='outbound'
+            and messages.sent_via in ('user','crm'))))
+  );
+drop policy if exists message_participant_reply_is_not_history_delete on public.messages;
+create policy message_participant_reply_is_not_history_delete
+  on public.messages as restrictive for delete to authenticated
+  using (exists (select 1 from public.conversations c
+    where c.id=messages.conversation_id and c.organization_id=messages.organization_id
+      and public.fn_can_view_conversation(c.organization_id,c.assigned_to_user_id)));
+
+-- O vínculo só é escrito pelo servidor. O toque notifica quem já observa a
+-- conversa, sem conceder SELECT nas participações alheias e sem trocar o dono.
+create or replace function public.fn_participacao_atualiza_conversa()
+returns trigger language plpgsql set search_path=public as $$
+begin
+  update public.conversations set updated_at=clock_timestamp()
+   where id=new.conversation_id and organization_id=new.organization_id;
+  return new;
+end;
+$$;
+revoke execute on function public.fn_participacao_atualiza_conversa() from public, anon, authenticated;
+grant execute on function public.fn_participacao_atualiza_conversa() to service_role;
+drop trigger if exists participacao_atualiza_conversa on public.conversation_participants;
+create trigger participacao_atualiza_conversa
+  after insert or update on public.conversation_participants
+  for each row execute function public.fn_participacao_atualiza_conversa();
+
+-- A própria linha continua legível depois de left_at, então o removido recebe
+-- a revogação. Publication pode não existir num Postgres puro do self-host.
+do $participacoes_realtime$ begin
+  if exists (select 1 from pg_publication where pubname='supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+       where pubname='supabase_realtime' and schemaname='public' and tablename='conversation_participants') then
+    alter publication supabase_realtime add table public.conversation_participants;
+  end if;
+end $participacoes_realtime$;
+
+notify pgrst, 'reload schema';
+
 
 -- ---- leitura sensível pelo poder de plataforma pede a sessão confirmada (migration 0762) ----
 -- `decrypt_cpf` troca `fn_is_platform_admin()` por `fn_is_platform_admin_full()`
@@ -60983,6 +61661,384 @@ $$;
 -- explícita para quem aplica só esta correção: apenas o servidor executa.
 revoke execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) from public, anon, authenticated;
 grant execute on function public.fn_lgpd_cascade_redact_contact(uuid, uuid, uuid) to service_role;
+-- ---- traço do turno do agente (migration 0721) ----
+-- manifest: traço do turno do agente — uma linha por execução, chave `job_id` (issue #2869).
+
+-- ═══ O que esta tabela responde, e por que ela existe ═════════════════════════
+--
+-- O turno real do agente é auditável hoje em pedaços que moram longe um do
+-- outro: `llm_calls` guarda cada chamada de modelo, `skill_activations` guarda
+-- quais skills entraram, `event_log` guarda a cadeia de eventos. Nenhuma linha
+-- responde "o que aconteceu NESTE turno": quais ferramentas o modelo chamou (e
+-- qual falhou), qual janela de histórico foi carregada, quais fontes de
+-- conhecimento estavam ligadas e como o turno terminou. Um turno que respondeu
+-- errado só se explica lendo o código.
+--
+-- ═══ Por que tabela nova, e não `ai_agent_runs` ═══════════════════════════════
+--
+-- `ai_agent_runs` nasceu com a forma disso (0023) e o motor vivo NUNCA escreveu
+-- nela: o único escritor é a prévia (`is_dry_run = true`), e por isso a aba
+-- Execuções passou a ler `llm_calls` (medido: 0 linhas em produção com 130
+-- chamadas `agent_turn`). Reaproveitá-la significaria decidir, de passagem, que
+-- ela volta a ser a fonte do turno real — decisão do mantenedor, não nossa.
+-- Esta tabela é ADITIVA: a tela de Execuções continua lendo o que já lê.
+--
+-- ═══ Por que SEM trigger de auditoria ════════════════════════════════════════
+--
+-- Toda outra tabela do módulo de IA audita cada linha. Aqui não, de propósito:
+-- é uma escrita por TURNO, e o conteúdo do traço já é o registro do que
+-- aconteceu. Auditar a auditoria dobraria o volume de `audit_log` sem responder
+-- nenhuma pergunta nova. Se a política mudar, é um `create trigger` de uma linha.
+--
+-- ═══ O que esta fatia ainda NÃO grava ════════════════════════════════════════
+--
+-- O snapshot/hash da composição do prompt, os trechos de conhecimento
+-- efetivamente recuperados, a janela de histórico REALMENTE carregada (a coluna
+-- `historico_mensagens` existe para a fatia que medir isso, e nasce `null` em
+-- vez de receber a janela PEDIDA, que é outra coisa) e a comparação entre a
+-- resposta crua do modelo e o texto enviado ficam para as fatias seguintes. O
+-- que esta já separa é prévia de turno real (`is_dry_run`).
+
+create table if not exists public.agent_turn_traces (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  -- Turno real: `job_id` (o job da fila É o run). Prévia: `preview_run_id`.
+  -- Exatamente um dos dois — o CHECK abaixo é o que impede a linha órfã.
+  job_id uuid,
+  preview_run_id text,
+  conversation_id uuid,
+  contact_id uuid,
+  agent_id uuid,
+  agent_version_id uuid,
+  is_dry_run boolean not null default false,
+  status text not null check (status in ('completed', 'failed', 'aborted')),
+  abort_reason text,
+  error_code text,
+  error_message text,
+  provider text,
+  model text,
+  messages_sent integer not null default 0 check (messages_sent >= 0),
+  historico_mensagens integer check (historico_mensagens is null or historico_mensagens >= 0),
+  -- Agregados do job, somados na hora de gravar (não há segunda escrita).
+  tokens_in integer not null default 0 check (tokens_in >= 0),
+  tokens_out integer not null default 0 check (tokens_out >= 0),
+  cost_cents numeric not null default 0,
+  latency_ms integer not null default 0 check (latency_ms >= 0),
+  -- Skills ativadas no turno (`skill_activations` do mesmo job).
+  skills jsonb not null default '[]'::jsonb,
+  -- Ferramentas chamadas: nome, estado (ok|falhou|bloqueada), erro e duração.
+  ferramentas jsonb not null default '[]'::jsonb,
+  ferramentas_truncadas boolean not null default false,
+  -- Fontes de conhecimento ligadas ao agente, com versão e hash.
+  kb_sources jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint agent_turn_traces_chave check (
+    (job_id is not null and preview_run_id is null)
+    or (job_id is null and preview_run_id is not null)
+  )
+);
+
+comment on table public.agent_turn_traces is
+  'Uma linha por execução do agente (issue #2869): chave `job_id` no turno real, `preview_run_id` na prévia. Agrega tokens/custo/latência de `llm_calls` e as skills de `skill_activations` do mesmo job, e guarda o que só existe no turno: as ferramentas chamadas (nome, estado, erro, duração), a janela de histórico e as fontes de conhecimento ligadas. Escrita melhor-esforço pelo motor — falhar aqui nunca derruba o atendimento.';
+
+-- A chave do turno real. Parcial de propósito: a prévia não tem job, e uma
+-- coluna nula não colide no Postgres — sem o `where`, o upsert do turno real
+-- não teria em que se apoiar (e o `on conflict` da gravação é o que torna a
+-- repetição de um turno idempotente em vez de duplicar a linha).
+create unique index if not exists agent_turn_traces_job_idx
+  on public.agent_turn_traces (job_id) where job_id is not null;
+
+create index if not exists agent_turn_traces_org_created_idx
+  on public.agent_turn_traces (organization_id, created_at desc);
+
+create index if not exists agent_turn_traces_preview_idx
+  on public.agent_turn_traces (preview_run_id) where preview_run_id is not null;
+
+-- O agregado do traço lê `skill_activations` pelo `job_id` a cada turno, e a
+-- tabela só tinha índice por organização e por skill (0078). Sem isto, cada
+-- turno paga uma varredura da tabela inteira para descobrir o que ele mesmo
+-- acabou de gravar.
+create index if not exists idx_skill_activations_job
+  on public.skill_activations (job_id) where job_id is not null;
+
+-- RLS: o traço é da organização e ninguém mais o lê. A leitura é do painel
+-- (sessão do usuário, `authenticated`), por uma policy só de `select`. A
+-- escrita é só do worker, que passa por fora do RLS: por isso `authenticated`
+-- perde o grant de escrita (o molde de `automation_rodizio_atribuicoes`, 0692),
+-- e `anon` não recebe nada em hipótese alguma: um traço carrega o texto do erro
+-- e os ids das fontes de conhecimento.
+alter table public.agent_turn_traces enable row level security;
+
+drop policy if exists tenant_isolation_agent_turn_traces_all on public.agent_turn_traces;
+drop policy if exists tenant_isolation_agent_turn_traces_select on public.agent_turn_traces;
+create policy tenant_isolation_agent_turn_traces_select on public.agent_turn_traces
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+revoke all on public.agent_turn_traces from anon, authenticated;
+grant select on public.agent_turn_traces to authenticated;
+grant all on public.agent_turn_traces to service_role;
+
+-- ---- #3201: o traço do turno ganha prazo (migration 9021) ----
+-- manifest: O traço do turno ganha poda por idade (#3201, entrega parcial da #2869). Função definer sem seletor de organização/linha, padrão 400 e piso 100 no corpo, lote com teto 10000, execute somente service_role. Reusa AI_TELEMETRY_RETENTION_DAYS, conforme decisão 218; índice de created_at e comentário guardado. Apêndice idempotente espelhado no baseline; a 0721 permanece intacta.
+--
+-- 9021 — adaptação da migration inédita 0778 de @webtecnica (#3516).
+-- Número/carimbo reservados pelo mantenedor; fonte e autoria preservadas na história.
+--
+-- A retenção usa o knob existente da telemetria da IA: padrão 400, piso 100.
+-- A API é uma entrega parcial; a tela continua na issue #3201. O leitor corta
+-- a janela no instante agora - retenção e entrega recibos técnicos projetados.
+-- As linhas legadas podem conter texto livre de erro: esta poda NÃO é uma
+-- higienização de conteúdo nem substitui a projeção segura do leitor.
+--
+-- Função irmã da 0587, sem editar sua definição aplicada. Reaplicar não muda
+-- o piso, não seleciona organização/id e não produz auditoria quando não apagou.
+
+-- Índice de poda: o DELETE por idade é diário e cresceria com a tabela. O
+-- índice que já existe começa por `organization_id` (0721), e esta poda não tem
+-- seletor de organização — sem este, cada rodada varre a tabela inteira.
+create index if not exists idx_agent_turn_traces_expurgo_created_at
+  on public.agent_turn_traces (created_at);
+
+-- O expurgo do traço do turno vencido. Mesma forma da família da 0587:
+-- `security definer` SEM seletor de linha (nenhum parâmetro de organização,
+-- contato, conversa ou id — o único predicado vindo de fora é a idade), piso
+-- dentro do CORPO (vale para qualquer chamador, inclusive um `psql` na mão),
+-- lote com teto de 10000 e revogação de `public`/`anon`/`authenticated`.
+create or replace function public.fn_expurgar_traco_do_turno_vencido(
+  p_retencao_dias int default null,
+  p_limite int default null
+) returns int
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  -- 400 = o mesmo padrão de `AI_TELEMETRY_RETENTION_DAYS` (RETENCAO_TELEMETRIA_
+  -- DE_IA_DIAS_PADRAO) e 100 = o mesmo piso (RETENCAO_TELEMETRIA_DE_IA_DIAS_
+  -- PISO). Os números são repetidos aqui de propósito, como nas irmãs da 0587:
+  -- a função vale para chamador que não passou pelo TypeScript (o `psql` da
+  -- madrugada). O par SQL × TypeScript é medido em
+  -- `tests/unit/retencao-do-traco-do-turno.test.ts`.
+  v_dias int := greatest(coalesce(p_retencao_dias, 400), 100);
+  v_limite int := least(greatest(coalesce(p_limite, 1000), 1), 10000);
+  v_corte timestamptz := now() - make_interval(days => v_dias);
+  v_apagadas int;
+begin
+  -- O corte fica no `where` ANTES do `limit` (a lição da 0167): filtrar depois
+  -- faria um lote inteiro de linhas ainda válidas devolver 0 e o cron parar com
+  -- backlog atrás.
+  with vencidas as (
+    select t.id from public.agent_turn_traces t
+     where t.created_at < v_corte
+     order by t.created_at limit v_limite
+  )
+  delete from public.agent_turn_traces t using vencidas v where t.id = v.id;
+  get diagnostics v_apagadas = row_count;
+  return v_apagadas;
+end;
+$$;
+revoke execute on function public.fn_expurgar_traco_do_turno_vencido(int,int) from public, anon, authenticated;
+grant  execute on function public.fn_expurgar_traco_do_turno_vencido(int,int) to service_role;
+
+-- O relógio da poda é `created_at`, e quem lê o traço pergunta por ele. Dizer
+-- isso na coluna é o que impede a próxima pessoa de indexar/filtrar por
+-- `updated_at` (que muda no upsert de um turno repetido) achando que é o mesmo
+-- eixo. Dentro da guarda: num clone sem a tabela da 0721 o comentário não pode
+-- derrubar a atualização.
+do $$
+begin
+  if to_regclass('public.agent_turn_traces') is not null then
+    comment on column public.agent_turn_traces.created_at is
+      'Quando o turno gravou o traço. É o relógio de fn_expurgar_traco_do_turno_vencido (9021) e o eixo do leitor /api/v1/ai/turn-traces — NÃO confundir com updated_at, que o upsert reescreve quando o mesmo job regrava.';
+  end if;
+end
+$$;
+
+notify pgrst, 'reload schema';
+
+-- ---- claim livre exige motivo e CAS (migration 9017) ----
+-- manifest: Restringe a exceção de atribuição da 0776 ao claim para si com CAS (#3479). Transferência, roteamento e escrita sem lock otimista continuam exigindo visibilidade; preserva filtros de organização, elegibilidade e grants. Substitui na árvore final a proposta 0776, inédita na main e com timestamp colidido; seus bytes e autoria permanecem no ancestor original. A 9017 redefine a função completa, sem depender da proposta.
+-- 9017 — a conversa livre invisível só é assumida pelo claim com CAS.
+-- Reserva do alocador root: 9017 @ 20261026221200; população conferida antes da criação.
+-- Idempotente, mesma assinatura, sem mudança de dados ou da leitura em own.
+
+CREATE OR REPLACE FUNCTION public.fn_conversation_assign(p_organization_id uuid, p_conversation_id uuid, p_to_user_id uuid, p_reason text, p_expected_assignee uuid DEFAULT NULL::uuid, p_enforce_expected boolean DEFAULT false)
+ RETURNS SETOF conversations
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_from uuid;
+  v_conv public.conversations%rowtype;
+begin
+  if not public.fn_support_write_allowed(p_organization_id) then raise exception 'support_readonly' using errcode='42501'; end if;
+  if auth.uid() is not null
+     and not public.fn_role_at_least(p_organization_id, 'agent') then
+    raise exception 'caller_not_authorized_for_org'
+      using hint = 'caller must be an active agent+ member of the organization';
+  end if;
+
+  if p_to_user_id is not null then
+    if coalesce(public.fn_member_role_in_org(p_to_user_id, p_organization_id), 'none')
+         not in ('agent','manager','admin') then
+      raise exception 'assignee_not_eligible_member'
+        using hint = 'target must be an active agent+ member of the organization';
+    end if;
+  end if;
+
+  -- Conversa fora da visibilidade de quem chama responde como conversa
+  -- inexistente (zero linhas). A regra fica no WHERE, com o dono da própria
+  -- linha (reavaliado na versão nova se houver espera), nunca um valor do
+  -- corpo. Service role (sem auth.uid) segue.
+  --
+  -- A EXCEÇÃO DA #3479: conversa SEM dono pode ser assumida por quem assume
+  -- para si. Sem ela o modo "Só os seus" se morde: a conversa que nasceu do
+  -- cadastro do contato tem dono nulo, o predicado do modo responde "não vejo"
+  -- para dono nulo, e o claim — a operação que daria dono a ela — era recusado,
+  -- com a tela dizendo "está com outro atendente" sobre uma conversa de
+  -- ninguém. O termo se limita sozinho: exige dono nulo E dono novo =
+  -- chamador, então conversa de colega (o caso que a 0685 protege), a
+  -- transferência para terceiro e o release continuam respondendo zero linhas
+  -- exatamente como antes.
+  select assigned_to_user_id into v_from
+    from public.conversations
+   where id = p_conversation_id
+     and organization_id = p_organization_id
+     and (
+       auth.uid() is null
+       or public.fn_can_view_conversation(organization_id, assigned_to_user_id)
+       or (assigned_to_user_id is null and p_to_user_id = auth.uid()
+           and p_reason = 'claim' and p_enforce_expected)
+     )
+   for no key update;
+
+  if not found then
+    return;
+  end if;
+
+  if p_enforce_expected and v_from is distinct from p_expected_assignee then
+    return;
+  end if;
+
+  update public.conversations
+     set assigned_to_user_id = p_to_user_id,
+         -- Desnormalizado JUNTO com o dono, na mesma transação: nunca existe
+         -- uma janela em que id e nome discordam. NULL junto com o id quando
+         -- a atribuição é removida (release) — nunca sobra um nome órfão de
+         -- dono nenhum. Lido de auth.users porque quem chama esta função
+         -- (RPC) não necessariamente tem acesso ao Admin API — a definer
+         -- resolve por dentro.
+         assigned_to_user_name = case
+           when p_to_user_id is null then null
+           else (select raw_user_meta_data ->> 'full_name' from auth.users where id = p_to_user_id)
+         end,
+         assigned_at = case when p_to_user_id is null then null else now() end,
+         assignee_kind = case when p_to_user_id is null then null else 'user' end,
+         status = case when p_to_user_id is null then 'open' else 'claimed' end,
+         status_changed_at = now(),
+         unread_count_for_assignee = 0,
+         bot_silenced_until = case
+           when p_reason = 'routing'  then bot_silenced_until
+           when p_to_user_id is null  then (case when last_handoff_at is null
+                                                 then null
+                                                 else bot_silenced_until end)
+           else 'infinity'::timestamptz
+         end,
+         updated_at = now()
+   where id = p_conversation_id
+   returning * into v_conv;
+
+  insert into public.conversation_assignment_events
+    (organization_id, conversation_id, from_user_id, to_user_id, changed_by, reason)
+  values
+    (p_organization_id, p_conversation_id, v_from, p_to_user_id, auth.uid(), p_reason);
+
+  return next v_conv;
+end;
+$function$;
+
+revoke all     on function public.fn_conversation_assign(uuid, uuid, uuid, text, uuid, boolean) from public, anon;
+grant  execute on function public.fn_conversation_assign(uuid, uuid, uuid, text, uuid, boolean) to authenticated, service_role;
+
+
+
+-- ---- propriedade da fila interna (migration 9020) ----
+-- manifest: A fila aceita gravação só de produtores internos; sessões mantêm leitura e comandos humanos delimitados, sem fabricar snapshots no enqueue.
+-- 9020 — propriedade da fila interna, sem mudar as transições de produto.
+--
+-- O cliente de sessão lê status; aprovar resposta e autorizar entrega continuam
+-- pelas RPCs SECURITY DEFINER já existentes, com os seus próprios guards.
+-- Service role e a role dedicada do worker conservam os grants próprios.
+-- Não altera policies, estados, índices, cron ou funções de negócio existentes.
+-- A coluna nova começa NULL em todo legado. A antiga chave no payload NÃO é
+-- origem autorizada e não é copiada nem limpa por reaplicação do baseline.
+
+alter table public.job_queue
+  add column if not exists catalog_presentation_snapshot jsonb;
+comment on column public.job_queue.catalog_presentation_snapshot is
+  'Estado dedicado da apresentação do catálogo com a identidade original da operação. Sem backfill do payload legado. Produzido por UPDATE interno sob o lease do job; não é input de enqueue.';
+
+revoke all on table public.job_queue from public, anon, authenticated;
+grant select on table public.job_queue to authenticated;
+grant select, insert, update, delete on table public.job_queue to service_role;
+
+-- Snapshot de execução não é input de enqueue, nem quando o enqueue vem do
+-- scheduler. O produtor legítimo congela o snapshot depois do claim por UPDATE
+-- do mesmo job running sob lease. JSON com a chave presente, mesmo null, recusa.
+create or replace function public.fn_job_snapshot_interno_no_enqueue()
+returns trigger
+language plpgsql
+security invoker
+set search_path = pg_catalog
+as $f$
+begin
+  if new.payload ? 'catalog_presentation_snapshot'
+     or new.catalog_presentation_snapshot is not null then
+    raise exception 'job_snapshot_internal' using errcode = '42501';
+  end if;
+  return new;
+end;
+$f$;
+
+-- Só o trigger usa esta função; nenhuma porta RPC ou grant novo de execução.
+revoke all on function public.fn_job_snapshot_interno_no_enqueue()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_job_snapshot_interno_no_enqueue on public.job_queue;
+create trigger trg_job_snapshot_interno_no_enqueue
+  before insert on public.job_queue
+  for each row execute function public.fn_job_snapshot_interno_no_enqueue();
+
+-- O vínculo já existente é job_queue.contact_id → contacts.id (ON DELETE
+-- CASCADE). Anonimizar não apaga a linha: a virada limpa SÓ o novo estado,
+-- na org/contato da linha original, preservando status/IDs/lease e o vizinho.
+create or replace function public.fn_limpar_snapshot_catalogo_ao_anonimizar()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog
+as $f$
+begin
+  update public.job_queue
+     set catalog_presentation_snapshot = null
+   where organization_id = old.organization_id
+     and contact_id = old.id
+     and catalog_presentation_snapshot is not null;
+  return new;
+end;
+$f$;
+
+-- Sem parâmetros e sem RPC: usa a identidade OLD da linha que foi anonimizada.
+revoke all on function public.fn_limpar_snapshot_catalogo_ao_anonimizar()
+  from public, anon, authenticated, service_role;
+
+drop trigger if exists trg_limpar_snapshot_catalogo_ao_anonimizar on public.contacts;
+create trigger trg_limpar_snapshot_catalogo_ao_anonimizar
+  after update of is_anonymized on public.contacts
+  for each row when (new.is_anonymized and not old.is_anonymized)
+  execute function public.fn_limpar_snapshot_catalogo_ao_anonimizar();
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
@@ -63280,33 +64336,6 @@ create view public.external_db_connections_safe
 revoke all on public.external_db_connections_safe from anon;
 grant select on public.external_db_connections_safe to authenticated;
 
--- ---- 0563: contato pessoal — a coluna e a saída de campanha (spec 21, fatia 1) ----
--- Espelho idempotente da migration 0563. É este apêndice que chega a todo
--- self-host: o install.sh aplica o baseline num banco novo e o update.sh o
--- re-aplica num banco existente; nenhum dos dois roda as migrations.
--- `is_personal` nasce desligado: contato novo é operacional até alguém marcar.
--- O status `personal` é saída própria de campanha — nunca `opted_out`, para
--- não inflar "pediu para parar".
-alter table public.contacts
-  add column if not exists is_personal boolean default false not null;
-
-comment on column public.contacts.is_personal is
-  'Contato de vida pessoal (spec 21): escondido da operação e inutilizado para envio. Só gerente/dono marca e desmarca, pela rota personal; quem/quando fica em auditoria + timeline, nunca aqui.';
-
-create index if not exists idx_contacts_org_personal
-  on public.contacts (organization_id)
-  where (is_personal = true);
-
-alter table public.campaign_recipients
-  drop constraint if exists campaign_recipients_status_check;
-
-alter table public.campaign_recipients
-  add constraint campaign_recipients_status_check check (status in (
-    'pending','queued','sending','sent','delivered','read','replied',
-    'failed','skipped','cancelled','opted_out','personal'
-  ));
-
-notify pgrst, 'reload schema';
 
 -- ---- APÊNDICE 0580: a chave do servidor MCP externo vira coluna cifrada ----
 -- Espelho idempotente da migration 0580. É este apêndice que chega a todo
@@ -64408,124 +65437,6 @@ alter table public.campaigns
 
 comment on column public.campaigns.velocidade is
   'gradual = uma mensagem por número a cada rodada (uma por minuto); rapida = rajada de várias por segundo, só com modelo aprovado (número oficial). Migration 0711.';
-
--- ---- traço do turno do agente (migration 0721) ----
--- manifest: traço do turno do agente — uma linha por execução, chave `job_id` (issue #2869).
-
--- ═══ O que esta tabela responde, e por que ela existe ═════════════════════════
---
--- O turno real do agente é auditável hoje em pedaços que moram longe um do
--- outro: `llm_calls` guarda cada chamada de modelo, `skill_activations` guarda
--- quais skills entraram, `event_log` guarda a cadeia de eventos. Nenhuma linha
--- responde "o que aconteceu NESTE turno": quais ferramentas o modelo chamou (e
--- qual falhou), qual janela de histórico foi carregada, quais fontes de
--- conhecimento estavam ligadas e como o turno terminou. Um turno que respondeu
--- errado só se explica lendo o código.
---
--- ═══ Por que tabela nova, e não `ai_agent_runs` ═══════════════════════════════
---
--- `ai_agent_runs` nasceu com a forma disso (0023) e o motor vivo NUNCA escreveu
--- nela: o único escritor é a prévia (`is_dry_run = true`), e por isso a aba
--- Execuções passou a ler `llm_calls` (medido: 0 linhas em produção com 130
--- chamadas `agent_turn`). Reaproveitá-la significaria decidir, de passagem, que
--- ela volta a ser a fonte do turno real — decisão do mantenedor, não nossa.
--- Esta tabela é ADITIVA: a tela de Execuções continua lendo o que já lê.
---
--- ═══ Por que SEM trigger de auditoria ════════════════════════════════════════
---
--- Toda outra tabela do módulo de IA audita cada linha. Aqui não, de propósito:
--- é uma escrita por TURNO, e o conteúdo do traço já é o registro do que
--- aconteceu. Auditar a auditoria dobraria o volume de `audit_log` sem responder
--- nenhuma pergunta nova. Se a política mudar, é um `create trigger` de uma linha.
---
--- ═══ O que esta fatia ainda NÃO grava ════════════════════════════════════════
---
--- O snapshot/hash da composição do prompt, os trechos de conhecimento
--- efetivamente recuperados, a janela de histórico REALMENTE carregada (a coluna
--- `historico_mensagens` existe para a fatia que medir isso, e nasce `null` em
--- vez de receber a janela PEDIDA, que é outra coisa) e a comparação entre a
--- resposta crua do modelo e o texto enviado ficam para as fatias seguintes. O
--- que esta já separa é prévia de turno real (`is_dry_run`).
-
-create table if not exists public.agent_turn_traces (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations (id) on delete cascade,
-  -- Turno real: `job_id` (o job da fila É o run). Prévia: `preview_run_id`.
-  -- Exatamente um dos dois — o CHECK abaixo é o que impede a linha órfã.
-  job_id uuid,
-  preview_run_id text,
-  conversation_id uuid,
-  contact_id uuid,
-  agent_id uuid,
-  agent_version_id uuid,
-  is_dry_run boolean not null default false,
-  status text not null check (status in ('completed', 'failed', 'aborted')),
-  abort_reason text,
-  error_code text,
-  error_message text,
-  provider text,
-  model text,
-  messages_sent integer not null default 0 check (messages_sent >= 0),
-  historico_mensagens integer check (historico_mensagens is null or historico_mensagens >= 0),
-  -- Agregados do job, somados na hora de gravar (não há segunda escrita).
-  tokens_in integer not null default 0 check (tokens_in >= 0),
-  tokens_out integer not null default 0 check (tokens_out >= 0),
-  cost_cents numeric not null default 0,
-  latency_ms integer not null default 0 check (latency_ms >= 0),
-  -- Skills ativadas no turno (`skill_activations` do mesmo job).
-  skills jsonb not null default '[]'::jsonb,
-  -- Ferramentas chamadas: nome, estado (ok|falhou|bloqueada), erro e duração.
-  ferramentas jsonb not null default '[]'::jsonb,
-  ferramentas_truncadas boolean not null default false,
-  -- Fontes de conhecimento ligadas ao agente, com versão e hash.
-  kb_sources jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint agent_turn_traces_chave check (
-    (job_id is not null and preview_run_id is null)
-    or (job_id is null and preview_run_id is not null)
-  )
-);
-
-comment on table public.agent_turn_traces is
-  'Uma linha por execução do agente (issue #2869): chave `job_id` no turno real, `preview_run_id` na prévia. Agrega tokens/custo/latência de `llm_calls` e as skills de `skill_activations` do mesmo job, e guarda o que só existe no turno: as ferramentas chamadas (nome, estado, erro, duração), a janela de histórico e as fontes de conhecimento ligadas. Escrita melhor-esforço pelo motor — falhar aqui nunca derruba o atendimento.';
-
--- A chave do turno real. Parcial de propósito: a prévia não tem job, e uma
--- coluna nula não colide no Postgres — sem o `where`, o upsert do turno real
--- não teria em que se apoiar (e o `on conflict` da gravação é o que torna a
--- repetição de um turno idempotente em vez de duplicar a linha).
-create unique index if not exists agent_turn_traces_job_idx
-  on public.agent_turn_traces (job_id) where job_id is not null;
-
-create index if not exists agent_turn_traces_org_created_idx
-  on public.agent_turn_traces (organization_id, created_at desc);
-
-create index if not exists agent_turn_traces_preview_idx
-  on public.agent_turn_traces (preview_run_id) where preview_run_id is not null;
-
--- O agregado do traço lê `skill_activations` pelo `job_id` a cada turno, e a
--- tabela só tinha índice por organização e por skill (0078). Sem isto, cada
--- turno paga uma varredura da tabela inteira para descobrir o que ele mesmo
--- acabou de gravar.
-create index if not exists idx_skill_activations_job
-  on public.skill_activations (job_id) where job_id is not null;
-
--- RLS: o traço é da organização e ninguém mais o lê. A leitura é do painel
--- (sessão do usuário, `authenticated`), por uma policy só de `select`. A
--- escrita é só do worker, que passa por fora do RLS: por isso `authenticated`
--- perde o grant de escrita (o molde de `automation_rodizio_atribuicoes`, 0692),
--- e `anon` não recebe nada em hipótese alguma: um traço carrega o texto do erro
--- e os ids das fontes de conhecimento.
-alter table public.agent_turn_traces enable row level security;
-
-drop policy if exists tenant_isolation_agent_turn_traces_all on public.agent_turn_traces;
-drop policy if exists tenant_isolation_agent_turn_traces_select on public.agent_turn_traces;
-create policy tenant_isolation_agent_turn_traces_select on public.agent_turn_traces
-  for select using (organization_id in (select public.fn_user_org_ids()));
-
-revoke all on public.agent_turn_traces from anon, authenticated;
-grant select on public.agent_turn_traces to authenticated;
-grant all on public.agent_turn_traces to service_role;
 
 -- ---- #3202: channel_sessions — a regra de escrita deixa de valer para a leitura (migration 0752) ----
 -- `for all` também vale para SELECT: fn_role_at_least (~4 ms) rodava por linha em todo embed de channel_sessions.

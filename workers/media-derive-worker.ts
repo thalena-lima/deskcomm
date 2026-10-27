@@ -29,6 +29,7 @@ import { createPool } from "@/lib/agent-engine/db/pool";
 import { env } from "@/lib/env";
 import type { EventRow, HandlerResult } from "@/lib/event-log/dispatcher";
 import { deriveMediaText, type DeriveDeps } from "@/lib/messaging/media/derive";
+import { isMediaPathInOrganization } from "@/lib/messaging/media/upload-validation";
 import { MARCADOR_NAO_LIDA, TIPOS_DERIVAVEIS } from "@/lib/messaging/media/derivable";
 import { deriveVideoText } from "@/lib/messaging/media/video-derive";
 import {
@@ -116,11 +117,23 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
   // que espera a mídia da CONVERSA, segurava a resposta do texto seguinte até o
   // teto de 120s por uma leitura que nunca ia acontecer.
   const markSkipped = async (detail: string): Promise<HandlerResult> => {
-    await admin.from("messages")
-      .update({ media_derived_status: "skipped" })
-      .eq("id", msg.id).eq("organization_id", msg.organization_id);
-    return { consumer_key, status: "skipped", detail };
+    try {
+      const { error } = await admin.from("messages")
+        .update({ media_derived_status: "skipped" })
+        .eq("id", msg.id).eq("organization_id", msg.organization_id);
+      if (!error) return { consumer_key, status: "skipped", detail };
+    } catch {
+      // O dreno precisa tentar de novo; a causa externa não vai para o recibo.
+    }
+    return { consumer_key, status: "error", detail: "skip_status_update_failed" };
   };
+
+  // A linha é da org do evento; o objeto apontado por ela ainda precisa ser.
+  // O admin ignora a RLS do Storage: marque só a desistência terminal antes
+  // de baixar, resolver credencial ou derivar; falha da marca pede nova tentativa.
+  if (msg.media_storage_path && !isMediaPathInOrganization(msg.media_storage_path, row.organization_id)) {
+    return markSkipped("invalid_media_path");
+  }
 
   // A retenção já retirou esta mídia (migration 0557, #1534): não há o que
   // derivar e, principalmente, nada a baixar do provedor — o `media_storage_path`

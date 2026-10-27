@@ -377,6 +377,101 @@ describe("tela de atualização — o aviso da volta automática (#2757)", () =>
 });
 
 /**
+ * #3488 — O RETRATO VELHO NÃO FALA PELA INSTALAÇÃO.
+ *
+ * Medido em produção: o host parou de bater às 11h45 (DNS sem upstream), a
+ * v1.90.0 saiu às 14h07 e às 16h a tela dizia "Você está na versão v1.89.0 —
+ * É a mais recente. Não há nada a fazer." O retrato em `system_version` é o
+ * último que o heartbeat conseguiu gravar: `latest_version` vazio,
+ * `compare_failed` falso e `has_known_release` verdadeiro é, ao mesmo tempo, o
+ * estado de "conferi agora" e o de "parei de conferir há horas". A única
+ * válvula para dúvida era `agent_online`, e ela só abre às 24h.
+ *
+ * Os DOIS sentidos são o assunto — a tela não pode afirmar mais do que sabe,
+ * nem menos:
+ *
+ *   (a) retrato VELHO não pode dizer "é a mais recente";
+ *   (b) retrato FRESCO pode (o controle: sem ele, "nunca afirmar nada" também
+ *       passaria, e a tela ficaria inútil);
+ *   (c) retrato velho com versão nova ANUNCIADA não perde o botão — ali a
+ *       informação antiga ainda basta para agir.
+ */
+describe("tela de atualização — retrato velho do host (#3488)", () => {
+  const ULTIMA_BATIDA = "2026-10-26T14:45:02.000Z";
+
+  /** O estado exato de produção durante a janela das 4h15 de silêncio. */
+  const RETRATO_VELHO: SystemVersion = {
+    current_version: "1.89.0",
+    is_owner: true,
+    latest_version: "",
+    update_available: false,
+    has_known_release: true,
+    compare_failed: false,
+    // A válvula antiga: menos de 24h, então o agente ainda conta como "online".
+    agent_online: true,
+    agent_stale: true,
+    agent_last_seen_at: ULTIMA_BATIDA,
+    notes: null,
+    run: null,
+  };
+
+  it("⭐ (a) retrato velho NÃO diz 'é a mais recente' — diz que não sabe", () => {
+    renderTela(RETRATO_VELHO);
+
+    expect(screen.queryByText("É a mais recente. Não há nada a fazer.")).toBeNull();
+    expect(screen.queryByText(/Você está na versão/)).toBeNull();
+
+    expect(screen.getByText("Não sei se há versão nova")).toBeInTheDocument();
+    expect(
+      screen.getByText(/não posso afirmar que esta é a mais recente/),
+    ).toBeInTheDocument();
+    // A idade da informação é dita, não escondida: a hora é a da última batida
+    // que o retrato registrou (renderizada no fuso de quem lê).
+    const d = new Date(ULTIMA_BATIDA);
+    const hora = `${String(d.getHours()).padStart(2, "0")}h${String(d.getMinutes()).padStart(2, "0")}`;
+    expect(screen.getByText(hora)).toBeInTheDocument();
+    // O retrato antigo orienta conferir a conexão; ainda não é agente offline.
+    expect(screen.queryByText(/hostgator-setup-kit\/update\.sh/)).toBeNull();
+    expect(screen.getByText(/verifique a conexão do servidor com a internet/)).toBeInTheDocument();
+  });
+
+  it("agente offline preserva o caminho manual, mesmo com retrato velho", () => {
+    renderTela({ ...RETRATO_VELHO, agent_online: false });
+
+    expect(screen.getByText("Atualização automática indisponível")).toBeInTheDocument();
+    expect(screen.getByText(/hostgator-setup-kit\/update\.sh/)).toBeInTheDocument();
+    expect(screen.queryByText("Não sei se há versão nova")).toBeNull();
+  });
+
+  it("⭐ (b) CONTROLE — retrato fresco PODE dizer 'é a mais recente'", () => {
+    renderTela({ ...RETRATO_VELHO, agent_stale: false });
+
+    expect(screen.getByText("É a mais recente. Não há nada a fazer.")).toBeInTheDocument();
+    expect(screen.queryByText("Não sei se há versão nova")).toBeNull();
+  });
+
+  it("(c) CONTROLE — retrato velho com versão nova anunciada mantém o botão", () => {
+    // O que o retrato velho não sustenta é "não há nada a fazer". Que existe uma
+    // versão mais nova, ele sustenta — e esconder o botão aqui tiraria a única
+    // saída de quem está atrasado.
+    renderTela({
+      ...RETRATO_VELHO,
+      latest_version: "1.90.0",
+      update_available: true,
+    });
+
+    expect(screen.getByRole("button", { name: "Atualizar agora" })).toBeInTheDocument();
+    expect(screen.queryByText("Não sei se há versão nova")).toBeNull();
+  });
+
+  it("retrato velho ainda diz qual é a versão instalada — só não afirma que ela é a última", () => {
+    renderTela(RETRATO_VELHO);
+
+    expect(screen.getByText(/Versão instalada:/)).toBeInTheDocument();
+  });
+});
+
+/**
  * `POST /api/v1/system/update` exige o código provado nesta sessão
  * (`requirePlatformAdminEscrita`). O dono que entrou pelo dispositivo confiável
  * — ou cujo código venceu com a tela aberta — recebia 403 `mfa_required` e a

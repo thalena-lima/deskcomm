@@ -382,7 +382,11 @@ export const AGENT_TOOL_DEFS = {
           .string()
           .nullable()
           .optional()
-          .describe('próxima ação concreta combinada com o lead'),
+          .describe(
+            'próxima ação concreta combinada com o lead (o que e até quando; ex.: "enviar o ' +
+              'orçamento até sexta"). "Responder o cliente" não é próxima ação: é o que você já ' +
+              'faz a cada mensagem. Sem ação concreta, não envie este campo.',
+          ),
         reason: z.string().optional().describe('evidência curta do avanço (vai ao audit do CRM)'),
       })
       .passthrough(),
